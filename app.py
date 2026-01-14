@@ -32,12 +32,10 @@ with st.sidebar:
     else:
         st.success("🔓 Acceso OK")
 
-# --- 4. CONFIGURACIÓN DEL MOTOR (ESTABLE) ---
+# --- 4. CONFIGURACIÓN DEL MOTOR ---
 genai.configure(api_key=API_KEY)
 
-# Usamos el modelo 1.5 Flash. 
-# Al haber actualizado requirements.txt, este modelo YA DEBE FUNCIONAR.
-# Es el que tiene la cuota gratuita generosa.
+# Usamos gemini-1.5-flash que es la versión estable y gratuita
 MODEL_NAME = 'gemini-1.5-flash' 
 model = genai.GenerativeModel(MODEL_NAME)
 
@@ -88,10 +86,11 @@ if uploaded_files:
         else:
             remitente, asunto, cuerpo = leer_eml(uploaded_file)
 
-        # 2. Recortar (1.5 Flash aguanta hasta 1 millón de tokens, así que podemos ser generosos)
+        # 2. Recortar texto para no saturar
         if cuerpo and len(cuerpo) > 20000: cuerpo = cuerpo[:20000]
 
-        # 3. Prompt
+        # 3. Prompt (Instrucciones para la IA)
+        # NOTA: Asegúrate de copiar las tres comillas del final """
         prompt = f"""
         Actúa como mi asistente comercial personal.
         He recibido este correo. Analízalo:
@@ -103,4 +102,26 @@ if uploaded_files:
         GENERA UN REPORTE EN MARKDOWN:
         1. **CLASIFICACIÓN**: Elige UNA [VENTA 💰 / TRÁMITE 📄 / OBRA 🏗️ / BASURA 🗑️].
         2. **RESUMEN**: ¿Qué pasa? (Máximo 15 palabras).
-        3. **ACCIÓN RECOMENDADA**: ¿
+        3. **ACCIÓN RECOMENDADA**: ¿Qué tengo que hacer yo?
+        4. **BORRADOR DE RESPUESTA**: Escribe el email de respuesta ideal.
+        """
+
+        try:
+            # Pausa de seguridad
+            time.sleep(2) 
+            
+            response = model.generate_content(prompt)
+            
+            with st.expander(f"📩 {asunto}", expanded=True):
+                st.markdown(response.text)
+                
+        except Exception as e:
+            st.error(f"Error con '{asunto}': {e}")
+            if "429" in str(e):
+                st.warning("⏳ Límite de velocidad. Espera un poco.")
+        
+        # Actualizar barra
+        progress_bar.progress((i + 1) / len(uploaded_files))
+
+else:
+    st.caption("Bandeja limpia. Esperando archivos...")
