@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# --- IMPORTAMOS MÓDULOS ---
+# --- IMPORTAMOS LOS MÓDULOS ---
 import suite_correo
 import suite_sustituciones
 import suite_administradores
@@ -10,7 +10,6 @@ import suite_administradores
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Suite Comercial IA", page_icon="🏢", layout="wide")
 
-# --- LISTAS ---
 MENU_INICIO = "🏠 Inicio"
 MENU_CORREO = "📮 Suite CORREO"
 MENU_SUSTITUCIONES = "🔧 Suite SUSTITUCIONES"
@@ -22,7 +21,8 @@ try:
     API_KEY = st.secrets["GOOGLE_API_KEY"]
     PASSWORD_REAL = st.secrets["APP_PASSWORD"]
 except:
-    st.error("⚠️ Configura los secretos."); st.stop()
+    st.error("⚠️ Configura los secretos en Streamlit Cloud.")
+    st.stop()
 
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
 if "db_correos" not in st.session_state: st.session_state.db_correos = {} 
@@ -35,7 +35,6 @@ def ir_a(pagina):
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
     st.title("Acceso Privado")
-    
     if not st.session_state.authenticated:
         input_pass = st.text_input("Contraseña", type="password")
         if input_pass == PASSWORD_REAL:
@@ -55,43 +54,18 @@ with st.sidebar:
     if st.button("Cerrar Sesión"):
         st.session_state.authenticated = False; st.rerun()
 
-# --- 4. MOTOR IA (MODO SUPERVIVENCIA) ---
+# --- 4. MOTOR IA (Configuración Estándar) ---
 genai.configure(api_key=API_KEY)
 
-# Lista ampliada para encontrar ALGO que funcione en tu cuenta
-CANDIDATOS = [
-    'gemini-1.5-flash',          # El ideal (1500 usos)
-    'gemini-1.5-flash-001',      # Variante nombre
-    'models/gemini-1.5-flash',   # Variante con prefijo
-    'gemini-2.0-flash-lite-preview-02-05', # Tu modelo 'Lite' (quizás tenga cupo)
-    'models/gemini-2.0-flash-lite-preview-02-05',
-    'gemini-2.0-flash',          # El que te dio error 429 (último recurso)
-    'gemini-pro'                 # El clásico
-]
-
-if "model_name" not in st.session_state or st.sidebar.button("♻️ Reiniciar IA"):
-    st.session_state.model_name = None
-    errores_log = []
-    
-    # Probamos uno por uno
-    for nombre in CANDIDATOS:
-        try:
-            t = genai.GenerativeModel(nombre)
-            t.generate_content("Test") # Prueba real
-            st.session_state.model_name = nombre
-            break # ¡Encontramos uno!
-        except Exception as e:
-            errores_log.append(f"{nombre}: {str(e)}")
-            continue
-
-if st.session_state.model_name:
-    model = genai.GenerativeModel(st.session_state.model_name)
-    # st.sidebar.caption(f"✅ Conectado a: {st.session_state.model_name}")
-else:
-    st.error("❌ ERROR CRÍTICO: Ningún modelo funciona con tu API Key.")
-    st.write("Detalle de errores:")
-    st.code("\n".join(errores_log))
-    st.warning("👉 SOLUCIÓN: Crea una NUEVA API Key en un NUEVO PROYECTO en Google AI Studio.")
+# Con la llave nueva, ESTE modelo funcionará seguro.
+try:
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Hacemos una llamada muda para confirmar que la llave nueva funciona
+    model.generate_content("test")
+except Exception as e:
+    st.error("❌ Error conectando con la IA.")
+    st.error(f"Detalle: {e}")
+    st.info("💡 Asegúrate de haber cambiado la API Key en los 'Secrets' por una creada en un PROYECTO NUEVO.")
     st.stop()
 
 # --- ROUTER ---
