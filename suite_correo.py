@@ -5,7 +5,7 @@ from email.parser import BytesParser
 import time
 import datetime
 
-# Función auxiliar para leer EML (Local para este archivo)
+# --- FUNCIONES AUXILIARES ---
 def leer_eml(f):
     try:
         b = f.getvalue(); msg = BytesParser(policy=policy.default).parsebytes(b)
@@ -14,21 +14,40 @@ def leer_eml(f):
         return msg['from'], msg['subject'], "HTML/Imagen"
     except: return "?", "Error", "Error"
 
-# --- ESTA ES LA FUNCIÓN PRINCIPAL QUE LLAMARÁ APP.PY ---
+# --- LISTA DE CLASIFICACIONES ---
+CATEGORIAS = [
+    "Ascensores PARADOS", 
+    "Amenazas de BAJAS", 
+    "IPOS Inspecciones de industria", 
+    "DINAMIZACIONES y MODERNIZACIONES", 
+    "SUSTITUCION de Ascensor", 
+    "Validación de Partes de Trabajo PRs", 
+    "DEUDA de clientes", 
+    "Subidas de IPC", 
+    "RENEGOCIACION de Contratos", 
+    "FACTURACIÓN de Clientes", 
+    "VENTA NUEVA", 
+    "OTROS"
+]
+
+# --- APP PRINCIPAL DEL MÓDULO ---
 def app(model):
     st.title("📮 Suite CORREO")
     
-    # Botón para volver (Usamos el estado de session del archivo principal)
+    # Botón Volver
     if st.button("⬅️ Volver al Inicio"): 
         st.session_state.navegacion = "🏠 Inicio"
         st.rerun()
     
-    tab1, tab2 = st.tabs(["📤 Análisis de Bandeja de Entrada", "📅 Tareas Diarias (Calendario)"])
+    # PESTAÑAS (Nombre actualizado)
+    tab1, tab2 = st.tabs(["📤 Análisis de Bandeja de Entrada", "📅 Calendario de Correos"])
 
-    # --- PESTAÑA 1: SUBIDA ---
+    # ---------------------------------------------------------
+    # PESTAÑA 1: SUBIDA Y ANÁLISIS AUTOMÁTICO
+    # ---------------------------------------------------------
     with tab1:
-        st.header("Analizar Nuevos Correos")
-        st.info("Sube tus archivos .msg o .eml.")
+        st.header("Analizar Nuevos Correos (IA)")
+        st.info("Sube tus archivos .msg o .eml. La IA los clasificará automáticamente.")
 
         with st.form("mail_form", clear_on_submit=True):
             uploaded_files = st.file_uploader("Arrastra archivos aquí", type=['msg', 'eml'], accept_multiple_files=True)
@@ -43,7 +62,7 @@ def app(model):
             for i, uploaded_file in enumerate(uploaded_files):
                 status_text.text(f"Analizando {i+1}/{len(uploaded_files)}...")
                 
-                # Leer archivo
+                # Lectura del archivo
                 if uploaded_file.name.lower().endswith(".msg"):
                     try: m = extract_msg.Message(uploaded_file); rem=m.sender; asu=m.subject; cue=m.body
                     except: rem="?"; asu="Error"; cue=""
@@ -52,39 +71,36 @@ def app(model):
                 
                 if cue and len(cue)>15000: cue=cue[:15000]
 
-                # PROMPT
+                # Prompt para la IA
                 prompt = f"""
                 Actúa como mi Asistente Comercial experto. Analiza este correo:
                 DE: {rem} | ASUNTO: {asu} | MENSAJE: {cue}
                 
-                Genera un reporte OBLIGATORIAMENTE con esta estructura exacta:
-
-                1. **Clasificación**: Elige UNA categoría exacta: 
-                [Ascensores PARADOS, Amenazas de BAJAS, IPOS Inspecciones, DINAMIZACIONES, SUSTITUCION, Partes de Trabajo, DEUDA, IPC, RENEGOCIACION, FACTURACIÓN, VENTA NUEVA, OTROS].
-                
-                2. **Resumen**: 1 frase.
-                3. **Accion**: Qué debo hacer.
-                4. **Respuesta**:
-                ```text
-                Hola...
-                ```
+                Genera un reporte con esta estructura:
+                1. Clasificación: Elige UNA de: {CATEGORIAS}
+                2. Resumen: 1 frase.
+                3. Acción: Qué debo hacer.
+                4. Respuesta: Borrador de respuesta.
                 """
                 
                 try:
-                    time.sleep(1)
+                    # Llamada a la IA
                     res = model.generate_content(prompt)
-                    
-                    resultados_tanda.append({
-                        "asunto": asu,
-                        "analisis": res.text,
-                        "hora": datetime.datetime.now().strftime("%H:%M")
-                    })
+                    analisis_texto = res.text
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    analisis_texto = f"⚠️ Error IA: {str(e)}"
+
+                # Guardamos resultado
+                resultados_tanda.append({
+                    "asunto": asu,
+                    "analisis": analisis_texto,
+                    "origen": "🤖 IA", # Para saber que vino de la IA
+                    "hora": datetime.datetime.now().strftime("%H:%M")
+                })
                 
                 progress_bar.progress((i+1)/len(uploaded_files))
             
-            # Guardar en memoria
+            # Guardar en memoria (session_state)
             hoy_str = str(datetime.date.today())
             if hoy_str in st.session_state.db_correos:
                 st.session_state.db_correos[hoy_str].extend(resultados_tanda)
@@ -92,22 +108,86 @@ def app(model):
                 st.session_state.db_correos[hoy_str] = resultados_tanda
 
             status_text.empty()
-            st.success("✅ Análisis guardado en Tareas Diarias.")
+            st.success(f"✅ {len(resultados_tanda)} correos analizados y guardados en el Calendario.")
 
-    # --- PESTAÑA 2: CALENDARIO ---
+    # ---------------------------------------------------------
+    # PESTAÑA 2: CALENDARIO Y GESTIÓN MANUAL
+    # ---------------------------------------------------------
     with tab2:
-        st.header("📅 Tareas Diarias")
-        col_cal, col_info = st.columns([1, 3])
+        col_cal, col_gestion = st.columns([1, 2])
+        
         with col_cal:
+            st.subheader("📅 Fecha")
             fecha_selec = st.date_input("Selecciona día:", datetime.date.today())
             fecha_str = str(fecha_selec)
-        
-        with col_info:
-            if fecha_str in st.session_state.db_correos:
+            
+            st.divider()
+            
+            # BOTÓN ELIMINAR TODO
+            if st.button("🗑️ Borrar Todo este Día", type="primary"):
+                st.session_state.db_correos[fecha_str] = []
+                st.rerun()
+
+        with col_gestion:
+            st.subheader(f"Tareas del {fecha_str}")
+            
+            # --- FORMULARIO DE CREACIÓN MANUAL (POP-UP) ---
+            with st.expander("➕ AÑADIR NUEVA TAREA MANUAL", expanded=False):
+                with st.form("manual_form", clear_on_submit=True):
+                    st.write("**Nuevo Registro Manual**")
+                    
+                    # Campos solicitados
+                    clasif = st.selectbox("Clasificación", CATEGORIAS)
+                    asunto_man = st.text_input("Asunto / Cliente")
+                    resumen_man = st.text_area("Resumen")
+                    accion_man = st.text_area("Acción a realizar")
+                    resp_man = st.text_area("Borrador de Respuesta")
+                    
+                    enviar_manual = st.form_submit_button("💾 Guardar Tarea")
+                    
+                    if enviar_manual:
+                        # Creamos el formato de texto similar al de la IA para mantener consistencia
+                        texto_generado = f"""
+                        **1. Clasificación:** {clasif}
+                        **2. Resumen:** {resumen_man}
+                        **3. Acción:** {accion_man}
+                        **4. Respuesta:**
+                        ```text
+                        {resp_man}
+                        ```
+                        """
+                        
+                        nuevo_registro = {
+                            "asunto": asunto_man if asunto_man else "Sin Asunto",
+                            "analisis": texto_generado,
+                            "origen": "👤 Manual",
+                            "hora": datetime.datetime.now().strftime("%H:%M")
+                        }
+                        
+                        # Guardar
+                        if fecha_str in st.session_state.db_correos:
+                            st.session_state.db_correos[fecha_str].append(nuevo_registro)
+                        else:
+                            st.session_state.db_correos[fecha_str] = [nuevo_registro]
+                        
+                        st.success("Tarea guardada.")
+                        st.rerun()
+
+            # --- LISTADO DE TAREAS ---
+            st.divider()
+            if fecha_str in st.session_state.db_correos and st.session_state.db_correos[fecha_str]:
                 tareas = st.session_state.db_correos[fecha_str]
-                st.markdown(f"### {fecha_str} ({len(tareas)} correos)")
-                for tarea in tareas:
-                    with st.expander(f"🕒 {tarea['hora']} | {tarea['asunto']}", expanded=False):
+                st.info(f"Tienes {len(tareas)} registros para hoy.")
+                
+                for i, tarea in enumerate(tareas):
+                    # Icono según origen
+                    icono = "🤖" if tarea.get('origen') == "🤖 IA" else "👤"
+                    
+                    with st.expander(f"{icono} {tarea['hora']} | {tarea['asunto']}"):
                         st.markdown(tarea['analisis'])
+                        # Botón para borrar tarea individual (Opcional, pero útil)
+                        if st.button("Borrar tarea", key=f"del_{fecha_str}_{i}"):
+                            st.session_state.db_correos[fecha_str].pop(i)
+                            st.rerun()
             else:
-                st.warning(f"Sin registros el {fecha_str}")
+                st.caption("No hay registros para este día.")
