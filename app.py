@@ -225,4 +225,29 @@ elif st.session_state.navegacion == "📮 Suite CORREO":
         
         with col_cal:
             # Selector de fecha (Calendario)
-            fecha_selec = st.date_input("Sele
+            fecha_selec = st.date_input("Selecciona un día:", datetime.date.today())
+            fecha_str = str(fecha_selec)
+        
+        with col_info:
+            # Lógica para mostrar datos
+            if fecha_str in st.session_state.db_correos:
+                tareas_del_dia = st.session_state.db_correos[fecha_str]
+                st.markdown(f"### Resultados del {fecha_str} ({len(tareas_del_dia)} correos)")
+                
+                for tarea in tareas_del_dia:
+                    with st.expander(f"🕒 {tarea['hora']} | {tarea['asunto']}", expanded=False):
+                        st.markdown(tarea['analisis'])
+            else:
+                st.warning(f"No hay registros analizados para la fecha: {fecha_str}")
+                st.caption("Sube correos en la pestaña anterior para que aparezcan aquí.")
+
+# --- OTRAS PANTALLAS ---
+elif st.session_state.navegacion == "🚧 Gestión de Obras":
+    st.title("🚧 Gestión de Obras")
+    if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
+    st.warning("🛠️ Módulo en construcción.")
+
+elif st.session_state.navegacion == "📄 Redactor de Contratos":
+    st.title("📄 Redactor de Contratos")
+    if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
+    st.warning("🛠️ Módulo en construcción.")
