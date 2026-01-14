@@ -14,6 +14,14 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- DEFINICIÓN DE CONSTANTES (Para evitar errores de texto) ---
+MENU_HOME = "🏠 Inicio"
+MENU_MAIL = "📮 Suite CORREO"
+MENU_OBRAS = "🔧 Suite SUSTITUCIONES"
+MENU_ADMIN = "👥 Suite ADMINISTRADORES"
+
+OPCIONES_MENU = [MENU_HOME, MENU_MAIL, MENU_OBRAS, MENU_ADMIN]
+
 # --- 2. SECRETOS ---
 try:
     API_KEY = st.secrets["GOOGLE_API_KEY"]
@@ -22,55 +30,8 @@ except:
     st.error("⚠️ Error: Configura los secretos en Streamlit Cloud.")
     st.stop()
 
-# --- 3. ESTADOS DE SESIÓN ---
+# --- 3. INICIALIZACIÓN DE ESTADOS ---
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
-if "navegacion" not in st.session_state: st.session_state.navegacion = "🏠 Inicio"
+if "navegacion" not in st.session_state: st.session_state.navegacion = MENU_HOME
 if "db_correos" not in st.session_state: st.session_state.db_correos = {} 
-if "model_name" not in st.session_state: st.session_state.model_name = None
-
-def navegar_a(pagina):
-    st.session_state.navegacion = pagina
-    st.rerun()
-
-# --- 4. BARRA LATERAL ---
-with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
-    st.title("Acceso Privado")
-    
-    # Login
-    if not st.session_state.authenticated:
-        input_pass = st.text_input("Contraseña", type="password")
-        if input_pass == PASSWORD_REAL:
-            st.session_state.authenticated = True
-            st.rerun()
-        elif input_pass:
-            st.warning("🔒 Clave incorrecta")
-        st.stop()
-
-    st.success("Hola, Comercial 👋")
-    st.divider()
-    
-    # Menú
-    opciones = ["🏠 Inicio", "📮 Suite CORREO", "🔧 Suite SUSTITUCIONES", "👥 Suite ADMINISTRADORES"]
-    
-    # Evitamos errores de índice
-    try:
-        idx = opciones.index(st.session_state.navegacion)
-    except:
-        idx = 0
-    
-    seleccion = st.radio("Herramientas:", opciones, index=idx)
-    
-    if seleccion != st.session_state.navegacion:
-        st.session_state.navegacion = seleccion
-        st.rerun()
-        
-    st.divider()
-    if st.button("Cerrar Sesión"):
-        st.session_state.authenticated = False
-        st.rerun()
-
-# --- 5. CONEXIÓN IA (Modelos 2.0 / Latest) ---
-genai.configure(api_key=API_KEY)
-
-# Lista de modelos que tu cuenta SÍ detecta
+if "model
