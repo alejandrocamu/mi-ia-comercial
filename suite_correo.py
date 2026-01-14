@@ -39,7 +39,7 @@ def app(model):
         st.session_state.navegacion = "🏠 Inicio"
         st.rerun()
     
-    # PESTAÑAS (Nombre actualizado)
+    # PESTAÑAS
     tab1, tab2 = st.tabs(["📤 Análisis de Bandeja de Entrada", "📅 Calendario de Correos"])
 
     # ---------------------------------------------------------
@@ -94,7 +94,7 @@ def app(model):
                 resultados_tanda.append({
                     "asunto": asu,
                     "analisis": analisis_texto,
-                    "origen": "🤖 IA", # Para saber que vino de la IA
+                    "origen": "🤖 IA", 
                     "hora": datetime.datetime.now().strftime("%H:%M")
                 })
                 
@@ -129,24 +129,22 @@ def app(model):
                 st.rerun()
 
         with col_gestion:
-            st.subheader(f"Tareas del {fecha_str}")
+            st.subheader(f"Correos del {fecha_str}")
             
             # --- FORMULARIO DE CREACIÓN MANUAL (POP-UP) ---
-            with st.expander("➕ AÑADIR NUEVA TAREA MANUAL", expanded=False):
+            with st.expander("➕ AÑADIR NUEVO CORREO MANUAL", expanded=False):
                 with st.form("manual_form", clear_on_submit=True):
                     st.write("**Nuevo Registro Manual**")
                     
-                    # Campos solicitados
                     clasif = st.selectbox("Clasificación", CATEGORIAS)
                     asunto_man = st.text_input("Asunto / Cliente")
                     resumen_man = st.text_area("Resumen")
                     accion_man = st.text_area("Acción a realizar")
                     resp_man = st.text_area("Borrador de Respuesta")
                     
-                    enviar_manual = st.form_submit_button("💾 Guardar Tarea")
+                    enviar_manual = st.form_submit_button("💾 Guardar Correo")
                     
                     if enviar_manual:
-                        # Creamos el formato de texto similar al de la IA para mantener consistencia
                         texto_generado = f"""
                         **1. Clasificación:** {clasif}
                         **2. Resumen:** {resumen_man}
@@ -164,30 +162,34 @@ def app(model):
                             "hora": datetime.datetime.now().strftime("%H:%M")
                         }
                         
-                        # Guardar
                         if fecha_str in st.session_state.db_correos:
                             st.session_state.db_correos[fecha_str].append(nuevo_registro)
                         else:
                             st.session_state.db_correos[fecha_str] = [nuevo_registro]
                         
-                        st.success("Tarea guardada.")
+                        st.success("Correo guardado.")
                         st.rerun()
 
-            # --- LISTADO DE TAREAS ---
+            # --- LISTADO DE CORREOS ---
             st.divider()
             if fecha_str in st.session_state.db_correos and st.session_state.db_correos[fecha_str]:
-                tareas = st.session_state.db_correos[fecha_str]
-                st.info(f"Tienes {len(tareas)} registros para hoy.")
+                lista_correos = st.session_state.db_correos[fecha_str]
+                st.info(f"Tienes {len(lista_correos)} registros para hoy.")
                 
-                for i, tarea in enumerate(tareas):
-                    # Icono según origen
-                    icono = "🤖" if tarea.get('origen') == "🤖 IA" else "👤"
+                for i, correo in enumerate(lista_correos):
+                    icono = "🤖" if correo.get('origen') == "🤖 IA" else "👤"
                     
-                    with st.expander(f"{icono} {tarea['hora']} | {tarea['asunto']}"):
-                        st.markdown(tarea['analisis'])
-                        # Botón para borrar tarea individual (Opcional, pero útil)
-                        if st.button("Borrar tarea", key=f"del_{fecha_str}_{i}"):
-                            st.session_state.db_correos[fecha_str].pop(i)
-                            st.rerun()
+                    with st.expander(f"{icono} {correo['hora']} | {correo['asunto']}"):
+                        st.markdown(correo['analisis'])
+                        
+                        # Botonera de Acciones
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("🗑️ Borrar correo", key=f"del_{fecha_str}_{i}"):
+                                st.session_state.db_correos[fecha_str].pop(i)
+                                st.rerun()
+                        with c2:
+                            if st.button("✅ Generar tarea", key=f"gen_{fecha_str}_{i}"):
+                                st.toast("🚀 Tarea generada correctamente (Simulación)")
             else:
                 st.caption("No hay registros para este día.")
