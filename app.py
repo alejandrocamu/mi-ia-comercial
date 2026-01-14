@@ -6,7 +6,7 @@ from email import policy
 from email.parser import BytesParser
 import time
 import os
-import datetime # Nueva librería para manejar fechas
+import datetime
 
 # --- 1. CONFIGURACIÓN GLOBAL ---
 st.set_page_config(
@@ -27,11 +27,13 @@ except:
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# Aquí creamos la "Base de Datos" temporal en memoria
 if "db_correos" not in st.session_state:
     st.session_state.db_correos = {} 
-    # Estructura: {'2023-10-27': [ {datos_correo_1}, {datos_correo_2} ] }
 
+if "navegacion" not in st.session_state:
+    st.session_state.navegacion = "🏠 Inicio"
+
+# Función para cambiar de página (sin conflictos)
 def ir_a(pagina):
     st.session_state.navegacion = pagina
     st.rerun()
@@ -53,201 +55,28 @@ with st.sidebar:
     st.success(f"Hola, Comercial 👋")
     st.divider()
     
-    if "navegacion" not in st.session_state:
-        st.session_state.navegacion = "🏠 Inicio"
+    # --- CORRECCIÓN DEL MENÚ PARA EVITAR ERRORES ---
+    # Definimos las opciones disponibles
+    OPCIONES_MENU = ["🏠 Inicio", "📮 Suite CORREO", "🚧 Gestión de Obras", "📄 Redactor de Contratos"]
+    
+    # Calculamos qué índice (0, 1, 2...) corresponde a la página actual
+    try:
+        indice_actual = OPCIONES_MENU.index(st.session_state.navegacion)
+    except:
+        indice_actual = 0
         
-    # MENU ACTUALIZADO
-    menu_selection = st.radio(
+    # Creamos el menú SIN la propiedad 'key', usando 'index' para controlarlo
+    seleccion_usuario = st.radio(
         "Menú Principal:",
-        ["🏠 Inicio", "📮 Suite CORREO", "🚧 Gestión de Obras", "📄 Redactor de Contratos"],
-        key="navegacion"
+        OPCIONES_MENU,
+        index=indice_actual
     )
+    
+    # Si el usuario toca el menú manualmente, actualizamos el estado
+    if seleccion_usuario != st.session_state.navegacion:
+        st.session_state.navegacion = seleccion_usuario
+        st.rerun()
     
     st.divider()
     if st.button("Cerrar Sesión"):
-        st.session_state.authenticated = False
-        st.rerun()
-
-# --- 5. MOTOR IA ---
-genai.configure(api_key=API_KEY)
-CANDIDATOS = ['gemini-flash-latest', 'gemini-1.5-flash-latest', 'gemini-pro-latest', 'models/gemini-1.5-flash-001']
-
-if "model_name" not in st.session_state:
-    for nombre in CANDIDATOS:
-        try:
-            t = genai.GenerativeModel(nombre); t.generate_content("Hola")
-            st.session_state.model_name = nombre; break
-        except: continue
-
-if "model_name" in st.session_state:
-    model = genai.GenerativeModel(st.session_state.model_name)
-else:
-    st.error("❌ Error conectando IA.")
-    st.stop()
-
-# --- 6. FUNCIONES AUXILIARES ---
-def leer_eml(f):
-    try:
-        b = f.getvalue(); msg = BytesParser(policy=policy.default).parsebytes(b)
-        c = msg.get_body(preferencelist=('plain'))
-        if c: return msg['from'], msg['subject'], c.get_content()
-        return msg['from'], msg['subject'], "HTML/Imagen"
-    except: return "?", "Error", "Error"
-
-# =========================================================
-#                 ZONA DE CONTENIDO
-# =========================================================
-
-# --- PANTALLA 1: DASHBOARD ---
-if st.session_state.navegacion == "🏠 Inicio":
-    st.title("🚀 Tu Centro de Mando")
-    st.markdown("### Selecciona una herramienta:")
-    st.markdown("---")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        with st.container(border=True):
-            st.write("📮")
-            st.subheader("Suite CORREO")
-            st.write("Analiza bandeja de entrada y gestiona tareas diarias.")
-            if st.button("Ir al Correo", use_container_width=True):
-                ir_a("📮 Suite CORREO")
-
-    with col2:
-        with st.container(border=True):
-            st.write("🚧")
-            st.subheader("Gestión de Obras")
-            st.write("Semáforo de estado y seguimiento.")
-            if st.button("Gestionar Obras", use_container_width=True):
-                ir_a("🚧 Gestión de Obras")
-
-    with col3:
-        with st.container(border=True):
-            st.write("📄")
-            st.subheader("Contratos")
-            st.write("Redacción automática de documentos.")
-            if st.button("Crear Documentos", use_container_width=True):
-                ir_a("📄 Redactor de Contratos")
-
-# --- PANTALLA 2: SUITE CORREO (NUEVA ESTRUCTURA) ---
-elif st.session_state.navegacion == "📮 Suite CORREO":
-    st.title("📮 Suite CORREO")
-    if st.button("⬅️ Volver al Inicio"): ir_a("🏠 Inicio")
-    
-    # CREAMOS LAS PESTAÑAS
-    tab1, tab2 = st.tabs(["📤 Análisis de Bandeja de Entrada", "📅 Tareas Diarias (Calendario)"])
-
-    # --- PESTAÑA 1: SUBIDA Y ANÁLISIS ---
-    with tab1:
-        st.header("Analizar Nuevos Correos")
-        st.info("Sube tus archivos .msg o .eml. Los resultados se guardarán en 'Tareas Diarias'.")
-
-        with st.form("mail_form", clear_on_submit=True):
-            uploaded_files = st.file_uploader("Arrastra archivos aquí", type=['msg', 'eml'], accept_multiple_files=True)
-            submitted = st.form_submit_button("⚡ ANALIZAR Y GUARDAR")
-
-        if submitted and uploaded_files:
-            st.write("---")
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            # Lista temporal para guardar los resultados de ESTA tanda
-            resultados_tanda = []
-
-            for i, uploaded_file in enumerate(uploaded_files):
-                status_text.text(f"Analizando correo {i+1} de {len(uploaded_files)}...")
-                
-                # Lectura
-                if uploaded_file.name.lower().endswith(".msg"):
-                    try: m = extract_msg.Message(uploaded_file); rem=m.sender; asu=m.subject; cue=m.body
-                    except: rem="?"; asu="Error"; cue=""
-                else:
-                    rem, asu, cue = leer_eml(uploaded_file)
-                
-                if cue and len(cue)>15000: cue=cue[:15000]
-
-                # Prompt Estricto
-                prompt = f"""
-                Actúa como mi Asistente Comercial experto. Analiza este correo:
-                DE: {rem} | ASUNTO: {asu} | MENSAJE: {cue}
-                
-                Genera un reporte OBLIGATORIAMENTE con esta estructura exacta:
-
-                1. **Clasificación**: Elige UNA de estas categorías exactas: 
-                [Ascensores PARADOS, Amenazas de BAJAS, IPOS Inspecciones de industria, DINAMIZACIONES y MODERNIZACIONES, SUSTITUCION de Ascensor, Validación de Partes de Trabajo PRs, DEUDA de clientes, Subidas de IPC, RENEGOCIACION de Contratos, FACTURACIÓN de Clientes, VENTA NUEVA, OTROS].
-                
-                2. **Resumen del correo**: Resumen del problema en 1 frase.
-                
-                3. **Accion a realizar**: Acción concreta que debo realizar yo.
-
-                4. **Respuesta**:
-                (Pon la respuesta dentro de un bloque de código formato texto para copiar y pegar):
-                ```text
-                Hola...
-                ```
-                """
-                
-                try:
-                    time.sleep(1)
-                    res = model.generate_content(prompt)
-                    
-                    # Guardamos el resultado en memoria en vez de mostrarlo
-                    resultados_tanda.append({
-                        "asunto": asu,
-                        "analisis": res.text,
-                        "hora": datetime.datetime.now().strftime("%H:%M")
-                    })
-                    
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                
-                progress_bar.progress((i+1)/len(uploaded_files))
-            
-            # --- GUARDADO EN MEMORIA ---
-            hoy_str = str(datetime.date.today()) # Ej: '2023-10-27'
-            
-            # Si ya había cosas hoy, añadimos las nuevas, si no, creamos la lista
-            if hoy_str in st.session_state.db_correos:
-                st.session_state.db_correos[hoy_str].extend(resultados_tanda)
-            else:
-                st.session_state.db_correos[hoy_str] = resultados_tanda
-
-            status_text.empty()
-            st.success("✅ Bandeja de entrada analizada y respuestas generadas.")
-            st.info("👉 Ve a la pestaña **'Tareas Diarias'** para ver los resultados.")
-
-    # --- PESTAÑA 2: CALENDARIO Y TAREAS ---
-    with tab2:
-        st.header("📅 Tareas Diarias")
-        
-        col_cal, col_info = st.columns([1, 3])
-        
-        with col_cal:
-            # Selector de fecha (Calendario)
-            fecha_selec = st.date_input("Selecciona un día:", datetime.date.today())
-            fecha_str = str(fecha_selec)
-        
-        with col_info:
-            # Lógica para mostrar datos
-            if fecha_str in st.session_state.db_correos:
-                tareas_del_dia = st.session_state.db_correos[fecha_str]
-                st.markdown(f"### Resultados del {fecha_str} ({len(tareas_del_dia)} correos)")
-                
-                for tarea in tareas_del_dia:
-                    with st.expander(f"🕒 {tarea['hora']} | {tarea['asunto']}", expanded=False):
-                        st.markdown(tarea['analisis'])
-            else:
-                st.warning(f"No hay registros analizados para la fecha: {fecha_str}")
-                st.caption("Sube correos en la pestaña anterior para que aparezcan aquí.")
-
-# --- OTRAS PANTALLAS ---
-elif st.session_state.navegacion == "🚧 Gestión de Obras":
-    st.title("🚧 Gestión de Obras")
-    if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
-    st.warning("🛠️ Módulo en construcción.")
-
-elif st.session_state.navegacion == "📄 Redactor de Contratos":
-    st.title("📄 Redactor de Contratos")
-    if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
-    st.warning("🛠️ Módulo en construcción.")
+        st.session_state.
