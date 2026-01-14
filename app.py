@@ -2,10 +2,10 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# --- IMPORTAMOS LOS MÓDULOS (NUEVOS NOMBRES) ---
+# --- IMPORTAMOS LOS MÓDULOS ---
 import suite_correo
-import suite_sustituciones      # Antes suite_obras
-import suite_administradores    # Antes suite_contratos
+import suite_sustituciones
+import suite_administradores
 
 # --- 1. CONFIGURACIÓN GLOBAL ---
 st.set_page_config(
@@ -70,9 +70,19 @@ with st.sidebar:
         st.session_state.authenticated = False
         st.rerun()
 
-# --- 4. MOTOR IA (Global) ---
+# --- 4. MOTOR IA (CORREGIDO PARA EVITAR LÍMITE 20/DÍA) ---
 genai.configure(api_key=API_KEY)
-CANDIDATOS = ['gemini-flash-latest', 'gemini-1.5-flash-latest', 'gemini-pro-latest', 'models/gemini-1.5-flash-001']
+
+# HEMOS CAMBIADO EL ORDEN AQUÍ:
+# Ponemos primero 'gemini-1.5-flash' explícitamente.
+# Este modelo tiene 1500 peticiones diarias gratis.
+# Quitamos los 'latest' para que no nos cuele el modelo 2.5 experimental.
+CANDIDATOS = [
+    'gemini-1.5-flash',      # PRIORIDAD 1: El estable y generoso
+    'models/gemini-1.5-flash-001',
+    'gemini-1.5-pro',
+    'gemini-pro'
+]
 
 if "model_name" not in st.session_state:
     for nombre in CANDIDATOS:
@@ -83,6 +93,7 @@ if "model_name" not in st.session_state:
 
 if "model_name" in st.session_state:
     model = genai.GenerativeModel(st.session_state.model_name)
+    # st.sidebar.caption(f"Motor: {st.session_state.model_name}") # Descomenta para ver cuál usa
 else:
     st.error("❌ Error IA."); st.stop()
 
@@ -124,7 +135,7 @@ elif st.session_state.navegacion == MENU_CORREO:
     suite_correo.app(model) 
 
 elif st.session_state.navegacion == MENU_SUSTITUCIONES:
-    suite_sustituciones.app() # Llama al nuevo archivo
+    suite_sustituciones.app() 
 
 elif st.session_state.navegacion == MENU_ADMINISTRADORES:
-    suite_administradores.app() # Llama al nuevo archivo
+    suite_administradores.app()
