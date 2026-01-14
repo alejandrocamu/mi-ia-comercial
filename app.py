@@ -3,6 +3,7 @@ import google.generativeai as genai
 import os
 
 # --- IMPORTAMOS LOS MÓDULOS ---
+# Asegúrate de que estos archivos existen en tu GitHub con estos nombres exactos
 import suite_correo
 import suite_sustituciones
 import suite_administradores
@@ -70,32 +71,35 @@ with st.sidebar:
         st.session_state.authenticated = False
         st.rerun()
 
-# --- 4. MOTOR IA (CORREGIDO PARA EVITAR LÍMITE 20/DÍA) ---
+# --- 4. MOTOR IA (CORREGIDO: SOLO MODELOS ESTABLES) ---
 genai.configure(api_key=API_KEY)
 
-# HEMOS CAMBIADO EL ORDEN AQUÍ:
-# Ponemos primero 'gemini-1.5-flash' explícitamente.
-# Este modelo tiene 1500 peticiones diarias gratis.
-# Quitamos los 'latest' para que no nos cuele el modelo 2.5 experimental.
+# AQUÍ ESTÁ EL ARREGLO:
+# Hemos quitado 'latest' y 'flash' a secas porque Google los redirige al modelo 2.5 (limitado).
+# Forzamos el uso del 1.5 que tiene 1500 usos diarios.
 CANDIDATOS = [
-    'gemini-1.5-flash',      # PRIORIDAD 1: El estable y generoso
-    'models/gemini-1.5-flash-001',
-    'gemini-1.5-pro',
-    'gemini-pro'
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-001',
+    'gemini-1.5-pro'
 ]
 
-if "model_name" not in st.session_state:
+# Forzamos la re-comprobación del modelo si da error
+if "model_name" not in st.session_state or st.sidebar.button("♻️ Reiniciar Motor IA"):
+    st.session_state.model_name = None
     for nombre in CANDIDATOS:
         try:
-            t = genai.GenerativeModel(nombre); t.generate_content("Hola")
-            st.session_state.model_name = nombre; break
+            t = genai.GenerativeModel(nombre)
+            t.generate_content("Hola") # Prueba de fuego
+            st.session_state.model_name = nombre
+            break
         except: continue
 
-if "model_name" in st.session_state:
+if st.session_state.model_name:
     model = genai.GenerativeModel(st.session_state.model_name)
-    # st.sidebar.caption(f"Motor: {st.session_state.model_name}") # Descomenta para ver cuál usa
+    # st.sidebar.caption(f"✅ Motor: {st.session_state.model_name}") 
 else:
-    st.error("❌ Error IA."); st.stop()
+    st.error("❌ Error: No se pudo conectar con ningún modelo 1.5 Flash. Espera un minuto y recarga.")
+    st.stop()
 
 # =========================================================
 #                 ROUTER (CONTROLADOR DE PÁGINAS)
