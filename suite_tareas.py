@@ -2,117 +2,108 @@ import streamlit as st
 import datetime
 
 # --- CONFIGURACIÓN DEL PIPELINE ---
+# Definimos las fases en una lista ordenada
 FASES = [
-    "1. Tarea Generada",
-    "2. Contacto Cliente",
-    "3. Espera de Respuesta",
-    "4. Presupuesto Realizado",
-    "5. Presupuesto Aceptado",
-    "6. Tarea Finalizada"
+    "Generada",
+    "Contacto",
+    "Espera",
+    "Presupuesto",
+    "Aceptado",
+    "Finalizada"
 ]
 
 def app():
-    st.title("📋 Suite TAREAS")
+    st.title("📋 Suite TAREAS (Kanban)")
     
-    # Botón Volver
     if st.button("⬅️ Volver al Inicio"): 
         st.session_state.navegacion = "🏠 Inicio"
         st.rerun()
 
-    # --- GESTIÓN DE ESTADO ---
-    if "db_tareas" not in st.session_state:
-        st.session_state.db_tareas = []
+    # Inicializar memoria de tareas
+    if "db_tareas" not in st.session_state: st.session_state.db_tareas = []
 
-    # --- LÓGICA DEL POP-UP (FORMULARIO DE CREACIÓN) ---
-    # Este bloque se activa si le das al botón manual O si vienes del Correo
+    # --- POP-UP DE CREACIÓN DE TAREA (Se activa manualmente o desde correo) ---
     if st.session_state.get("show_task_popup", False):
         with st.container(border=True):
             st.markdown("### ✨ Nueva Tarea")
-            
-            # Recuperamos datos pre-cargados (si vienen del correo)
             pre_datos = st.session_state.get("new_task_data", {})
             
             with st.form("form_nueva_tarea"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    titulo = st.text_input("Título / Cliente", value=pre_datos.get("titulo", ""))
-                    prioridad = st.selectbox("Prioridad", ["Alta 🔥", "Media ⚠️", "Baja 🧊"])
-                with col2:
-                    fase = st.selectbox("Fase Inicial", FASES)
-                    fecha = st.date_input("Fecha Límite", datetime.date.today())
+                c1, c2 = st.columns(2)
+                titulo = c1.text_input("Cliente / Título", value=pre_datos.get("titulo", ""))
+                prioridad = c1.selectbox("Prioridad", ["🔥 Alta", "⚠️ Media", "🧊 Baja"])
+                fase = c2.selectbox("Fase Inicial", FASES)
+                fecha = c2.date_input("Límite", datetime.date.today())
+                desc = st.text_area("Detalles", value=pre_datos.get("descripcion", ""))
                 
-                descripcion = st.text_area("Descripción / Detalles", value=pre_datos.get("descripcion", ""))
-                
-                # Botonera del formulario
-                c_guardar, c_cancelar = st.columns([1, 1])
-                with c_guardar:
-                    submitted = st.form_submit_button("💾 Guardar Tarea", type="primary")
-                with c_cancelar:
-                    cancelado = st.form_submit_button("❌ Cancelar")
+                guardar = st.form_submit_button("💾 Crear Tarea", type="primary")
+                cancelar = st.form_submit_button("❌ Cancelar")
 
-                if submitted:
-                    nueva_tarea = {
-                        "id": len(st.session_state.db_tareas) + 1,
-                        "titulo": titulo,
-                        "fase": fase,
-                        "prioridad": prioridad,
-                        "fecha": str(fecha),
-                        "descripcion": descripcion,
-                        "creado_el": str(datetime.date.today())
+                if guardar:
+                    nueva = {
+                        "id": int(datetime.datetime.now().timestamp()), # ID único basado en tiempo
+                        "titulo": titulo, "fase": fase, "prioridad": prioridad,
+                        "fecha": str(fecha), "descripcion": desc
                     }
-                    st.session_state.db_tareas.append(nueva_tarea)
-                    # Limpiamos el estado del popup
-                    st.session_state.show_task_popup = False
-                    st.session_state.new_task_data = {} # Limpiar datos temporales
-                    st.success("Tarea creada correctamente.")
-                    st.rerun()
-                
-                if cancelado:
+                    st.session_state.db_tareas.append(nueva)
                     st.session_state.show_task_popup = False
                     st.session_state.new_task_data = {}
                     st.rerun()
+                
+                if cancelar:
+                    st.session_state.show_task_popup = False
+                    st.rerun()
         st.divider()
-
-    # --- BOTÓN MANUAL PARA ABRIR EL POP-UP ---
-    if not st.session_state.get("show_task_popup", False):
+    else:
+        # Botón normal para abrir el formulario
         if st.button("➕ Nueva Tarea Manual"):
             st.session_state.show_task_popup = True
-            st.session_state.new_task_data = {} # Vacío porque es manual
+            st.session_state.new_task_data = {}
             st.rerun()
 
-    # --- VISUALIZACIÓN DEL PIPELINE (KANBAN SIMPLIFICADO) ---
-    st.subheader("Pipeline de Trabajo")
-    
-    # Creamos pestañas para las fases (es más limpio que 6 columnas estrechas)
-    tabs = st.tabs([f.split(". ")[1] for f in FASES]) # Quitamos el número para el nombre del tab
+    st.write("") # Espacio
 
-    for i, tab in enumerate(tabs):
-        fase_actual = FASES[i]
-        
-        with tab:
-            # Filtramos tareas de esta fase
-            tareas_fase = [t for t in st.session_state.db_tareas if t["fase"] == fase_actual]
+    # --- TABLERO KANBAN (6 COLUMNAS) ---
+    # Creamos las 6 columnas visuales
+    cols = st.columns(len(FASES))
+
+    # Iteramos por cada fase para pintar su columna
+    for i, fase_nombre in enumerate(FASES):
+        with cols[i]:
+            # Cabecera de la columna
+            st.markdown(f"**{fase_nombre}**")
+            st.markdown("---")
             
-            if not tareas_fase:
-                st.caption("No hay tareas en esta fase.")
+            # Filtramos las tareas que están en ESTA fase
+            tareas_en_fase = [t for t in st.session_state.db_tareas if t["fase"] == fase_nombre]
             
-            for tarea in tareas_fase:
-                with st.expander(f"{tarea['prioridad']} | {tarea['titulo']}"):
-                    st.write(f"**Descripción:** {tarea['descripcion']}")
-                    st.write(f"📅 **Límite:** {tarea['fecha']}")
+            # Pintamos cada tarea como una tarjeta
+            for tarea in tareas_en_fase:
+                with st.container(border=True):
+                    # Título y Prioridad
+                    st.markdown(f"**{tarea['titulo']}**")
+                    st.caption(f"{tarea['prioridad']} | 📅 {tarea['fecha']}")
                     
-                    st.divider()
-                    
-                    # MOVER DE FASE
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        # Botón para avanzar fase
-                        if i < len(FASES) - 1:
-                            if st.button(f"➡️ Avanzar a {FASES[i+1].split('. ')[1]}", key=f"av_{tarea['id']}"):
-                                tarea["fase"] = FASES[i+1]
-                                st.rerun()
-                    with c2:
-                         # Botón para borrar
-                        if st.button("🗑️ Eliminar", key=f"del_t_{tarea['id']}"):
+                    # Descripción colapsable para ahorrar espacio
+                    with st.expander("Ver info"):
+                        st.caption(tarea['descripcion'])
+                        if st.button("🗑️", key=f"del_{tarea['id']}"):
                             st.session_state.db_tareas.remove(tarea)
                             st.rerun()
+                    
+                    # --- BOTONES DE MOVIMIENTO (FLECHAS) ---
+                    c_izq, c_der = st.columns(2)
+                    
+                    # Botón Mover Izquierda (si no es la primera fase)
+                    with c_izq:
+                        if i > 0:
+                            if st.button("⬅️", key=f"prev_{tarea['id']}"):
+                                tarea["fase"] = FASES[i-1]
+                                st.rerun()
+                    
+                    # Botón Mover Derecha (si no es la última fase)
+                    with c_der:
+                        if i < len(FASES) - 1:
+                            if st.button("➡️", key=f"next_{tarea['id']}"):
+                                tarea["fase"] = FASES[i+1]
+                                st.rerun()
