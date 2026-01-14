@@ -26,7 +26,6 @@ except:
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# Función para cambiar de página desde los botones del inicio
 def ir_a(pagina):
     st.session_state.navegacion = pagina
     st.rerun()
@@ -35,7 +34,6 @@ with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
     st.title("Acceso Privado")
     
-    # Login
     if not st.session_state.authenticated:
         input_pass = st.text_input("Contraseña", type="password")
         if input_pass == PASSWORD_REAL:
@@ -48,15 +46,13 @@ with st.sidebar:
     st.success(f"Hola, Comercial 👋")
     st.divider()
     
-    # MENÚ LATERAL (Conectado al estado 'navegacion')
-    # Si no existe la variable, la iniciamos en Inicio
     if "navegacion" not in st.session_state:
         st.session_state.navegacion = "🏠 Inicio"
         
     menu_selection = st.radio(
         "Herramientas:",
         ["🏠 Inicio", "📧 Análisis de bandeja de entrada", "🚧 Gestión de Obras", "📄 Redactor de Contratos"],
-        key="navegacion" # Esto conecta el menú con los botones del dashboard
+        key="navegacion"
     )
     
     st.divider()
@@ -66,7 +62,6 @@ with st.sidebar:
 
 # --- 4. MOTOR IA ---
 genai.configure(api_key=API_KEY)
-# Lista de candidatos (Tu "Llave maestra")
 CANDIDATOS = ['gemini-flash-latest', 'gemini-1.5-flash-latest', 'gemini-pro-latest', 'models/gemini-1.5-flash-001']
 
 if "model_name" not in st.session_state:
@@ -95,26 +90,22 @@ def leer_eml(f):
 #                 ZONA DE CONTENIDO
 # =========================================================
 
-# --- PANTALLA 1: DASHBOARD DE INICIO (BOTONES) ---
+# --- PANTALLA 1: DASHBOARD ---
 if st.session_state.navegacion == "🏠 Inicio":
     st.title("🚀 Tu Centro de Mando")
     st.markdown("### Selecciona una herramienta para empezar:")
     st.markdown("---")
 
-    # Creamos 3 columnas para las tarjetas
     col1, col2, col3 = st.columns(3)
 
-    # TARJETA 1: CORREOS
     with col1:
         with st.container(border=True):
             st.write("📧")
             st.subheader("Bandeja de Entrada")
             st.write("Analiza y clasifica tus correos diarios masivamente con IA.")
-            # El botón llama a la función ir_a()
             if st.button("Abrir Analizador", use_container_width=True):
                 ir_a("📧 Análisis de bandeja de entrada")
 
-    # TARJETA 2: OBRAS
     with col2:
         with st.container(border=True):
             st.write("🚧")
@@ -123,7 +114,6 @@ if st.session_state.navegacion == "🏠 Inicio":
             if st.button("Gestionar Obras", use_container_width=True):
                 ir_a("🚧 Gestión de Obras")
 
-    # TARJETA 3: CONTRATOS
     with col3:
         with st.container(border=True):
             st.write("📄")
@@ -149,7 +139,7 @@ elif st.session_state.navegacion == "📧 Análisis de bandeja de entrada":
         progress_bar = st.progress(0)
         
         for i, uploaded_file in enumerate(uploaded_files):
-            # Lógica de lectura
+            # Lectura
             if uploaded_file.name.lower().endswith(".msg"):
                 try: m = extract_msg.Message(uploaded_file); rem=m.sender; asu=m.subject; cue=m.body
                 except: rem="?"; asu="Error"; cue=""
@@ -158,15 +148,27 @@ elif st.session_state.navegacion == "📧 Análisis de bandeja de entrada":
             
             if cue and len(cue)>15000: cue=cue[:15000]
 
+            # --- AQUI ESTA EL CAMBIO IMPORTANTE: EL PROMPT ---
             prompt = f"""
-            Rol: Asistente Comercial. Analiza:
+            Actúa como mi Asistente Comercial experto. Analiza este correo:
             DE: {rem} | ASUNTO: {asu} | MENSAJE: {cue}
             
-            SALIDA MARKDOWN:
-            1. **CLASIFICACIÓN**: [VENTA 💰/TRÁMITE 📄/OBRA 🏗️/BASURA 🗑️]
-            2. **RESUMEN**: 1 frase.
-            3. **ACCIÓN**: Qué hacer.
-            4. **RESPUESTA**: Borrador email.
+            Genera un reporte OBLIGATORIAMENTE con esta estructura exacta:
+
+            1. **Clasificación**: Elige UNA de estas categorías exactas (copia el nombre tal cual): 
+               [Ascensores PARADOS, Amenazas de BAJAS, IPOS Inspecciones de industria, DINAMIZACIONES y MODERNIZACIONES, SUSTITUCION de Ascensor, Validación de Partes de Trabajo PRs, DEUDA de clientes, Subidas de IPC, RENEGOCIACION de Contratos, FACTURACIÓN de Clientes, VENTA NUEVA, OTROS].
+            
+            2. **Resumen del correo**: Resumen del problema en 1 frase.
+            
+            3. **Accion a realizar**: Acción concreta que debo realizar yo.
+
+            4. **Respuesta**:
+            (Pon la respuesta dentro de un bloque de código para que se vea diferente, así:)
+            ```text
+            Hola [Nombre],
+            ...cuerpo del mensaje...
+            Saludos.
+            ```
             """
             
             try:
@@ -180,13 +182,13 @@ elif st.session_state.navegacion == "📧 Análisis de bandeja de entrada":
             progress_bar.progress((i+1)/len(uploaded_files))
         st.success("✅ ¡Trabajo terminado!")
 
-# --- OTRAS PANTALLAS (Placeholders) ---
+# --- OTRAS PANTALLAS ---
 elif st.session_state.navegacion == "🚧 Gestión de Obras":
     st.title("🚧 Gestión de Obras")
     if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
-    st.warning("🛠️ Módulo en construcción. Aquí irá el semáforo de obras.")
+    st.warning("🛠️ Módulo en construcción.")
 
 elif st.session_state.navegacion == "📄 Redactor de Contratos":
     st.title("📄 Redactor de Contratos")
     if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
-    st.warning("🛠️ Módulo en construcción. Aquí podrás generar PDFs.")
+    st.warning("🛠️ Módulo en construcción.")
