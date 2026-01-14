@@ -34,7 +34,7 @@ with st.sidebar:
 
 # --- 4. CONFIGURACIÓN GEMINI ---
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 # --- 5. LÓGICA INTERNA ---
 def leer_eml(uploaded_file):
