@@ -55,28 +55,20 @@ with st.sidebar:
     st.success(f"Hola, Comercial 👋")
     st.divider()
     
-    # --- CORRECCIÓN DEL MENÚ PARA EVITAR ERRORES ---
-    # Definimos las opciones disponibles
+    # --- MENÚ DE NAVEGACIÓN ---
     OPCIONES_MENU = ["🏠 Inicio", "📮 Suite CORREO", "🚧 Gestión de Obras", "📄 Redactor de Contratos"]
     
-    # Calculamos qué índice (0, 1, 2...) corresponde a la página actual
+    # Buscamos en qué página estamos para marcarla en el menú
     try:
         indice_actual = OPCIONES_MENU.index(st.session_state.navegacion)
     except:
         indice_actual = 0
         
-    # Creamos el menú SIN la propiedad 'key', usando 'index' para controlarlo
+    # Dibujamos el menú
     seleccion_usuario = st.radio(
         "Menú Principal:",
         OPCIONES_MENU,
         index=indice_actual
     )
     
-    # Si el usuario toca el menú manualmente, actualizamos el estado
-    if seleccion_usuario != st.session_state.navegacion:
-        st.session_state.navegacion = seleccion_usuario
-        st.rerun()
-    
-    st.divider()
-    if st.button("Cerrar Sesión"):
-        st.session_state.
+    # Si el usuario cambia el menú manualmente, actual
