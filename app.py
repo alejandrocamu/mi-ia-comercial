@@ -1,12 +1,11 @@
 import streamlit as st
-import extract_msg
 import google.generativeai as genai
-import email
-from email import policy
-from email.parser import BytesParser
-import time
 import os
-import datetime
+
+# --- IMPORTAMOS TUS NUEVOS MÓDULOS ---
+import suite_correo
+import suite_obras
+import suite_contratos
 
 # --- 1. CONFIGURACIÓN GLOBAL ---
 st.set_page_config(
@@ -15,30 +14,31 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 2. GESTIÓN DE SECRETOS ---
+# --- LISTA MAESTRA DE NAVEGACIÓN ---
+MENU_INICIO = "🏠 Inicio"
+MENU_CORREO = "📮 Suite CORREO"
+MENU_OBRAS = "🚧 Gestión de Obras"
+MENU_CONTRATOS = "📄 Redactor de Contratos"
+
+OPCIONES_MENU = [MENU_INICIO, MENU_CORREO, MENU_OBRAS, MENU_CONTRATOS]
+
+# --- 2. GESTIÓN DE SECRETOS Y MEMORIA ---
 try:
     API_KEY = st.secrets["GOOGLE_API_KEY"]
     PASSWORD_REAL = st.secrets["APP_PASSWORD"]
 except:
-    st.error("⚠️ Error: Configura los secretos en Streamlit Cloud.")
+    st.error("⚠️ Configura los secretos en Streamlit Cloud.")
     st.stop()
 
-# --- 3. GESTIÓN DE ESTADO (MEMORIA) ---
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+if "authenticated" not in st.session_state: st.session_state.authenticated = False
+if "db_correos" not in st.session_state: st.session_state.db_correos = {} 
+if "navegacion" not in st.session_state: st.session_state.navegacion = MENU_INICIO
 
-if "db_correos" not in st.session_state:
-    st.session_state.db_correos = {} 
-
-if "navegacion" not in st.session_state:
-    st.session_state.navegacion = "🏠 Inicio"
-
-# Función para cambiar de página (sin conflictos)
 def ir_a(pagina):
     st.session_state.navegacion = pagina
     st.rerun()
 
-# --- 4. BARRA LATERAL ---
+# --- 3. BARRA LATERAL (Solo Login y Menú) ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
     st.title("Acceso Privado")
@@ -55,20 +55,67 @@ with st.sidebar:
     st.success(f"Hola, Comercial 👋")
     st.divider()
     
-    # --- MENÚ DE NAVEGACIÓN ---
-    OPCIONES_MENU = ["🏠 Inicio", "📮 Suite CORREO", "🚧 Gestión de Obras", "📄 Redactor de Contratos"]
+    # Sincronización del menú
+    try: indice = OPCIONES_MENU.index(st.session_state.navegacion)
+    except: indice = 0; st.session_state.navegacion = MENU_INICIO
+
+    seleccion = st.radio("Herramientas:", OPCIONES_MENU, index=indice)
+
+    if seleccion != st.session_state.navegacion:
+        st.session_state.navegacion = seleccion
+        st.rerun()
     
-    # Buscamos en qué página estamos para marcarla en el menú
-    try:
-        indice_actual = OPCIONES_MENU.index(st.session_state.navegacion)
-    except:
-        indice_actual = 0
-        
-    # Dibujamos el menú
-    seleccion_usuario = st.radio(
-        "Menú Principal:",
-        OPCIONES_MENU,
-        index=indice_actual
-    )
-    
-    # Si el usuario cambia el menú manualmente, actual
+    st.divider()
+    if st.button("Cerrar Sesión"):
+        st.session_state.authenticated = False
+        st.rerun()
+
+# --- 4. MOTOR IA (Global) ---
+genai.configure(api_key=API_KEY)
+CANDIDATOS = ['gemini-flash-latest', 'gemini-1.5-flash-latest', 'gemini-pro-latest', 'models/gemini-1.5-flash-001']
+
+if "model_name" not in st.session_state:
+    for nombre in CANDIDATOS:
+        try:
+            t = genai.GenerativeModel(nombre); t.generate_content("Hola")
+            st.session_state.model_name = nombre; break
+        except: continue
+
+if "model_name" in st.session_state:
+    model = genai.GenerativeModel(st.session_state.model_name)
+else:
+    st.error("❌ Error IA."); st.stop()
+
+# =========================================================
+#                 ROUTER (CONTROLADOR DE PÁGINAS)
+# =========================================================
+
+# PANTALLA DE INICIO
+if st.session_state.navegacion == MENU_INICIO:
+    st.title("🚀 Tu Centro de Mando")
+    st.markdown("### Selecciona una herramienta:")
+    st.markdown("---")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        with st.container(border=True):
+            st.write("📮"); st.subheader("Suite CORREO")
+            if st.button("Ir al Correo", use_container_width=True): ir_a(MENU_CORREO)
+    with col2:
+        with st.container(border=True):
+            st.write("🚧"); st.subheader("Obras")
+            if st.button("Gestionar Obras", use_container_width=True): ir_a(MENU_OBRAS)
+    with col3:
+        with st.container(border=True):
+            st.write("📄"); st.subheader("Contratos")
+            if st.button("Documentos", use_container_width=True): ir_a(MENU_CONTRATOS)
+
+# PANTALLAS DE HERRAMIENTAS (Llamamos a los otros archivos)
+elif st.session_state.navegacion == MENU_CORREO:
+    suite_correo.app(model) # <--- Aquí delegamos el trabajo al archivo suite_correo.py
+
+elif st.session_state.navegacion == MENU_OBRAS:
+    suite_obras.app()
+
+elif st.session_state.navegacion == MENU_CONTRATOS:
+    suite_contratos.app()
