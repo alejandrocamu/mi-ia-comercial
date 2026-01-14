@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# --- IMPORTAMOS TUS MÓDULOS ---
+# --- IMPORTAMOS LOS MÓDULOS ---
 import suite_correo
 import suite_sustituciones
 import suite_administradores
@@ -19,25 +19,23 @@ try:
     API_KEY = st.secrets["GOOGLE_API_KEY"]
     PASSWORD_REAL = st.secrets["APP_PASSWORD"]
 except:
-    st.error("⚠️ Error: No se detectan los secretos. Configúralos en Streamlit Cloud.")
+    st.error("⚠️ Error: Configura los secretos en Streamlit Cloud.")
     st.stop()
 
-# Inicializar estados de sesión
+# Inicializar estados
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
 if "db_correos" not in st.session_state: st.session_state.db_correos = {} 
 if "navegacion" not in st.session_state: st.session_state.navegacion = "🏠 Inicio"
 
-# Función de navegación
 def navegar_a(pagina):
     st.session_state.navegacion = pagina
     st.rerun()
 
-# --- 3. BARRA LATERAL (LOGIN Y MENÚ) ---
+# --- 3. BARRA LATERAL ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
     st.title("Acceso Privado")
     
-    # Login
     if not st.session_state.authenticated:
         input_pass = st.text_input("Contraseña", type="password")
         if input_pass == PASSWORD_REAL:
@@ -47,22 +45,15 @@ with st.sidebar:
             st.warning("🔒 Incorrecta")
         st.stop()
 
-    # Usuario Logueado
     st.success("Hola, Comercial 👋")
     st.divider()
     
-    # Menú Lateral
     opciones = ["🏠 Inicio", "📮 Suite CORREO", "🔧 Suite SUSTITUCIONES", "👥 Suite ADMINISTRADORES"]
-    
-    # Asegurar que la selección actual existe en la lista
-    try:
-        idx = opciones.index(st.session_state.navegacion)
-    except:
-        idx = 0
+    try: idx = opciones.index(st.session_state.navegacion)
+    except: idx = 0
         
     seleccion = st.radio("Herramientas:", opciones, index=idx)
     
-    # Si cambia el radio button, actualizamos navegación
     if seleccion != st.session_state.navegacion:
         st.session_state.navegacion = seleccion
         st.rerun()
@@ -73,15 +64,37 @@ with st.sidebar:
         st.session_state.navegacion = "🏠 Inicio"
         st.rerun()
 
-# --- 4. CONEXIÓN IA ---
+# --- 4. CONEXIÓN IA (CONFIGURADO PARA GEMINI PRO) ---
 genai.configure(api_key=API_KEY)
 
-# Intentamos conectar con el modelo ESTÁNDAR (gemini-1.5-flash)
-# Este modelo requiere la API KEY NUEVA (Proyecto Nuevo)
-try:
-    model = genai.GenerativeModel('gemini-1.5-flash')
-except Exception as e:
-    st.error("❌ Error fatal de conexión con Google AI.")
+# Lista de modelos "Pro" (Versión 1.0 y 1.5 Pro)
+# Estos suelen tener buenos límites y aparecían en tu lista.
+CANDIDATOS = [
+    'gemini-pro',          # El clásico 1.0 (Muy estable)
+    'gemini-pro-latest',   # Variante que tenías en tu lista
+    'models/gemini-pro',
+    'gemini-1.5-pro',      # Versión potente (si la tienes activa)
+    'gemini-1.5-pro-latest'
+]
+
+if "model_name" not in st.session_state:
+    st.session_state.model_name = None
+    # Buscamos cuál funciona
+    for nombre in CANDIDATOS:
+        try:
+            test_model = genai.GenerativeModel(nombre)
+            test_model.generate_content("Hola") # Prueba de conexión
+            st.session_state.model_name = nombre
+            break
+        except:
+            continue
+
+if st.session_state.model_name:
+    model = genai.GenerativeModel(st.session_state.model_name)
+    # st.sidebar.success(f"Motor: {st.session_state.model_name}") # Descomenta si quieres ver cuál usas
+else:
+    st.error("❌ No se encuentra ningún modelo 'Gemini Pro' en tu cuenta.")
+    st.warning("Intenta crear una API KEY nueva en un proyecto nuevo de Google AI Studio.")
     st.stop()
 
 # =========================================================
@@ -118,19 +131,13 @@ if st.session_state.navegacion == "🏠 Inicio":
 
 # PANTALLAS DE HERRAMIENTAS
 elif st.session_state.navegacion == "📮 Suite CORREO":
-    try:
-        suite_correo.app(model)
-    except Exception as e:
-        st.error(f"Error cargando módulo de correo: {e}")
+    try: suite_correo.app(model)
+    except Exception as e: st.error(f"Error módulo correo: {e}")
 
 elif st.session_state.navegacion == "🔧 Suite SUSTITUCIONES":
-    try:
-        suite_sustituciones.app()
-    except Exception as e:
-        st.error(f"Error cargando módulo sustituciones: {e}")
+    try: suite_sustituciones.app()
+    except Exception as e: st.error(f"Error módulo sustituciones: {e}")
 
 elif st.session_state.navegacion == "👥 Suite ADMINISTRADORES":
-    try:
-        suite_administradores.app()
-    except Exception as e:
-        st.error(f"Error cargando módulo administradores: {e}")
+    try: suite_administradores.app()
+    except Exception as e: st.error(f"Error módulo administradores: {e}")
