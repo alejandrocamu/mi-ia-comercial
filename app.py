@@ -62,44 +62,18 @@ with st.sidebar:
         st.session_state.authenticated = False
         st.rerun()
 
-# --- 4. CONEXIÓN IA (LISTA EXACTA DE TU DIAGNÓSTICO) ---
+# --- 4. CONEXIÓN IA (Modo PRO) ---
 genai.configure(api_key=API_KEY)
 
-# Esta lista contiene SOLO los modelos que salieron en tu diagnóstico.
-# Priorizamos el "Lite" esperando que tenga menos restricciones.
-CANDIDATOS = [
-    'gemini-2.0-flash-lite-preview-02-05', # Intento 1: El ligero
-    'gemini-2.0-flash-lite',                # Intento 2: Alias del ligero
-    'gemini-2.0-flash',                     # Intento 3: El potente (Límite 20)
-    'gemini-flash-latest'                   # Intento 4: El genérico
-]
-
-if "model_name" not in st.session_state:
-    st.session_state.model_name = None
-    
-    # Buscamos desesperadamente uno que funcione
-    for nombre in CANDIDATOS:
-        try:
-            t = genai.GenerativeModel(nombre)
-            t.generate_content("Hola") # Prueba de vida
-            st.session_state.model_name = nombre
-            break
-        except:
-            continue
-
-if st.session_state.model_name:
-    model = genai.GenerativeModel(st.session_state.model_name)
-    # st.sidebar.caption(f"Motor activo: {st.session_state.model_name}") 
-else:
-    st.error("⛔ BLOQUEO TOTAL DE GOOGLE")
-    st.warning("""
-    Tu API Key actual está bloqueada por exceso de uso (Límite 20/día) y no tiene acceso a los modelos ilimitados.
-    
-    SOLUCIÓN ÚNICA:
-    1. Ve a aistudio.google.com
-    2. Crea una API Key nueva en un PROYECTO NUEVO.
-    3. Ponla en los Secrets de Streamlit.
-    """)
+# Usamos DIRECTAMENTE el modelo 1.5 Flash.
+# Al tener la facturación activada, este modelo vuela y no tiene límites diarios.
+try:
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Pequeña prueba silenciosa para asegurar conexión
+    model.generate_content("test")
+except Exception as e:
+    st.error("❌ Error de conexión.")
+    st.info("Asegúrate de que la API Key en 'Secrets' pertenece a tu proyecto con facturación activada.")
     st.stop()
 
 # =========================================================
@@ -116,30 +90,30 @@ if st.session_state.navegacion == "🏠 Inicio":
     with col1:
         with st.container(border=True):
             st.subheader("📮 Suite CORREO")
-            st.write("Analizar emails.")
+            st.write("Analizar emails masivamente.")
             if st.button("Ir al Correo", use_container_width=True): navegar_a("📮 Suite CORREO")
             
     with col2:
         with st.container(border=True):
             st.subheader("🔧 Sustituciones")
-            st.write("Gestión técnica.")
+            st.write("Gestión técnica y obras.")
             if st.button("Ir a Sustituciones", use_container_width=True): navegar_a("🔧 Suite SUSTITUCIONES")
             
     with col3:
         with st.container(border=True):
             st.subheader("👥 Administradores")
-            st.write("Fincas y contratos.")
+            st.write("Gestión de fincas.")
             if st.button("Ir a Administradores", use_container_width=True): navegar_a("👥 Suite ADMINISTRADORES")
 
 # HERRAMIENTAS
 elif st.session_state.navegacion == "📮 Suite CORREO":
     try: suite_correo.app(model)
-    except Exception as e: st.error(f"Error Correo: {e}")
+    except Exception as e: st.error(f"Error: {e}")
 
 elif st.session_state.navegacion == "🔧 Suite SUSTITUCIONES":
     try: suite_sustituciones.app()
-    except Exception as e: st.error(f"Error Sustituciones: {e}")
+    except Exception as e: st.error(f"Error: {e}")
 
 elif st.session_state.navegacion == "👥 Suite ADMINISTRADORES":
     try: suite_administradores.app()
-    except Exception as e: st.error(f"Error Administradores: {e}")
+    except Exception as e: st.error(f"Error: {e}")
