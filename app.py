@@ -8,11 +8,7 @@ import time
 import os
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(
-    page_title="Asistente Comercial",
-    page_icon="🛡️",
-    layout="wide"
-)
+st.set_page_config(page_title="Asistente Comercial", page_icon="🛡️", layout="wide")
 
 # --- 2. SECRETOS ---
 try:
@@ -32,14 +28,38 @@ with st.sidebar:
     else:
         st.success("🔓 Acceso OK")
 
-# --- 4. CONFIGURACIÓN DEL MOTOR ---
+# --- 4. SELECCIÓN AUTOMÁTICA DE MODELO (MODO TODOTERRENO) ---
 genai.configure(api_key=API_KEY)
 
-# Usamos gemini-1.5-flash que es la versión estable y gratuita
-MODEL_NAME = 'gemini-1.5-flash' 
-model = genai.GenerativeModel(MODEL_NAME)
+# Lista de nombres posibles según tu catálogo personal.
+# El código probará uno por uno hasta que conecte.
+CANDIDATOS = [
+    'gemini-flash-latest',       # El que salía en tu lista
+    'gemini-1.5-flash-latest',   # Otra variante común
+    'gemini-pro-latest',         # Versión estándar
+    'models/gemini-1.5-flash-001' # Nombre técnico completo
+]
 
-st.sidebar.info(f"✅ Motor activo: {MODEL_NAME}")
+model = None
+model_name_usado = ""
+
+# Probamos conectar con el primer modelo que funcione
+for nombre in CANDIDATOS:
+    try:
+        test_model = genai.GenerativeModel(nombre)
+        # Hacemos una prueba muda para ver si responde sin error 404
+        test_model.generate_content("Hola") 
+        model = test_model
+        model_name_usado = nombre
+        break # ¡Si funciona, dejamos de buscar!
+    except Exception:
+        continue # Si falla, probamos el siguiente
+
+if model is None:
+    st.error("❌ No se pudo conectar con ningún modelo gratuito. Revisa tu API Key.")
+    st.stop()
+else:
+    st.sidebar.success(f"✅ Conectado a: {model_name_usado}")
 
 # --- 5. FUNCIONES ---
 def leer_eml(uploaded_file):
@@ -48,18 +68,14 @@ def leer_eml(uploaded_file):
         msg = BytesParser(policy=policy.default).parsebytes(bytes_data)
         asunto = msg['subject']
         remitente = msg['from']
-        
         cuerpo = msg.get_body(preferencelist=('plain'))
         if cuerpo:
             return remitente, asunto, cuerpo.get_content()
-        
         html_part = msg.get_body(preferencelist=('html'))
-        if html_part:
-            return remitente, asunto, "Contenido HTML (imágenes/formato complejo)."
-            
+        if html_part: return remitente, asunto, "Solo contenido HTML/Imágenes."
         return remitente, asunto, "Sin contenido texto"
     except:
-        return "Desconocido", "Error lectura", "No se pudo leer el archivo"
+        return "Desconocido", "Error lectura", "No se pudo leer"
 
 # --- 6. INTERFAZ ---
 st.title("🛡️ El Filtro: Tu Asistente de Operaciones")
@@ -69,59 +85,43 @@ uploaded_files = st.file_uploader("Zona de carga", type=['msg', 'eml'], accept_m
 
 if uploaded_files:
     st.info(f"Analizando {len(uploaded_files)} correos...")
-    
-    # Barra de progreso
     progress_bar = st.progress(0)
     
     for i, uploaded_file in enumerate(uploaded_files):
-        # 1. Leer archivo
+        # Leer archivo
         if uploaded_file.name.lower().endswith(".msg"):
             try:
                 msg = extract_msg.Message(uploaded_file)
-                asunto = msg.subject
-                remitente = msg.sender
-                cuerpo = msg.body
+                asunto = msg.subject; remitente = msg.sender; cuerpo = msg.body
             except:
                 asunto = "Error MSG"; remitente = "?"; cuerpo = ""
         else:
             remitente, asunto, cuerpo = leer_eml(uploaded_file)
 
-        # 2. Recortar texto para no saturar
-        if cuerpo and len(cuerpo) > 20000: cuerpo = cuerpo[:20000]
+        # Recortar
+        if cuerpo and len(cuerpo) > 15000: cuerpo = cuerpo[:15000]
 
-        # 3. Prompt (Instrucciones para la IA)
-        # NOTA: Asegúrate de copiar las tres comillas del final """
+        # Prompt
         prompt = f"""
-        Actúa como mi asistente comercial personal.
-        He recibido este correo. Analízalo:
-        
+        Actúa como mi asistente comercial. Analiza:
         - DE: {remitente}
         - ASUNTO: {asunto}
         - MENSAJE: {cuerpo}
         
-        GENERA UN REPORTE EN MARKDOWN:
-        1. **CLASIFICACIÓN**: Elige UNA [VENTA 💰 / TRÁMITE 📄 / OBRA 🏗️ / BASURA 🗑️].
-        2. **RESUMEN**: ¿Qué pasa? (Máximo 15 palabras).
-        3. **ACCIÓN RECOMENDADA**: ¿Qué tengo que hacer yo?
-        4. **BORRADOR DE RESPUESTA**: Escribe el email de respuesta ideal.
+        GENERA REPORTE (Markdown):
+        1. **CLASIFICACIÓN**: [VENTA 💰 / TRÁMITE 📄 / OBRA 🏗️ / BASURA 🗑️].
+        2. **RESUMEN**: 1 frase.
+        3. **ACCIÓN**: Qué debo hacer.
+        4. **RESPUESTA**: Borrador de email.
         """
 
         try:
-            # Pausa de seguridad
-            time.sleep(2) 
-            
+            time.sleep(1.5) # Pausa anti-bloqueo
             response = model.generate_content(prompt)
-            
             with st.expander(f"📩 {asunto}", expanded=True):
                 st.markdown(response.text)
-                
         except Exception as e:
-            st.error(f"Error con '{asunto}': {e}")
-            if "429" in str(e):
-                st.warning("⏳ Límite de velocidad. Espera un poco.")
+            st.error(f"Error: {e}")
+            if "429" in str(e): st.warning("⏳ Espera un momento (Límite de velocidad).")
         
-        # Actualizar barra
         progress_bar.progress((i + 1) / len(uploaded_files))
-
-else:
-    st.caption("Bandeja limpia. Esperando archivos...")
