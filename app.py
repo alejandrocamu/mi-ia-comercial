@@ -6,6 +6,7 @@ from email import policy
 from email.parser import BytesParser
 import time
 import os
+import datetime # Nueva librería para manejar fechas
 
 # --- 1. CONFIGURACIÓN GLOBAL ---
 st.set_page_config(
@@ -22,14 +23,20 @@ except:
     st.error("⚠️ Error: Configura los secretos en Streamlit Cloud.")
     st.stop()
 
-# --- 3. LOGIN Y NAVEGACIÓN ---
+# --- 3. GESTIÓN DE ESTADO (MEMORIA) ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
+
+# Aquí creamos la "Base de Datos" temporal en memoria
+if "db_correos" not in st.session_state:
+    st.session_state.db_correos = {} 
+    # Estructura: {'2023-10-27': [ {datos_correo_1}, {datos_correo_2} ] }
 
 def ir_a(pagina):
     st.session_state.navegacion = pagina
     st.rerun()
 
+# --- 4. BARRA LATERAL ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
     st.title("Acceso Privado")
@@ -49,9 +56,10 @@ with st.sidebar:
     if "navegacion" not in st.session_state:
         st.session_state.navegacion = "🏠 Inicio"
         
+    # MENU ACTUALIZADO
     menu_selection = st.radio(
-        "Herramientas:",
-        ["🏠 Inicio", "📧 Análisis de bandeja de entrada", "🚧 Gestión de Obras", "📄 Redactor de Contratos"],
+        "Menú Principal:",
+        ["🏠 Inicio", "📮 Suite CORREO", "🚧 Gestión de Obras", "📄 Redactor de Contratos"],
         key="navegacion"
     )
     
@@ -60,7 +68,7 @@ with st.sidebar:
         st.session_state.authenticated = False
         st.rerun()
 
-# --- 4. MOTOR IA ---
+# --- 5. MOTOR IA ---
 genai.configure(api_key=API_KEY)
 CANDIDATOS = ['gemini-flash-latest', 'gemini-1.5-flash-latest', 'gemini-pro-latest', 'models/gemini-1.5-flash-001']
 
@@ -77,7 +85,7 @@ else:
     st.error("❌ Error conectando IA.")
     st.stop()
 
-# --- 5. FUNCIONES ---
+# --- 6. FUNCIONES AUXILIARES ---
 def leer_eml(f):
     try:
         b = f.getvalue(); msg = BytesParser(policy=policy.default).parsebytes(b)
@@ -93,24 +101,24 @@ def leer_eml(f):
 # --- PANTALLA 1: DASHBOARD ---
 if st.session_state.navegacion == "🏠 Inicio":
     st.title("🚀 Tu Centro de Mando")
-    st.markdown("### Selecciona una herramienta para empezar:")
+    st.markdown("### Selecciona una herramienta:")
     st.markdown("---")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
         with st.container(border=True):
-            st.write("📧")
-            st.subheader("Bandeja de Entrada")
-            st.write("Analiza y clasifica tus correos diarios masivamente con IA.")
-            if st.button("Abrir Analizador", use_container_width=True):
-                ir_a("📧 Análisis de bandeja de entrada")
+            st.write("📮")
+            st.subheader("Suite CORREO")
+            st.write("Analiza bandeja de entrada y gestiona tareas diarias.")
+            if st.button("Ir al Correo", use_container_width=True):
+                ir_a("📮 Suite CORREO")
 
     with col2:
         with st.container(border=True):
             st.write("🚧")
             st.subheader("Gestión de Obras")
-            st.write("Semáforo de estado y seguimiento de incidencias técnicas.")
+            st.write("Semáforo de estado y seguimiento.")
             if st.button("Gestionar Obras", use_container_width=True):
                 ir_a("🚧 Gestión de Obras")
 
@@ -118,77 +126,103 @@ if st.session_state.navegacion == "🏠 Inicio":
         with st.container(border=True):
             st.write("📄")
             st.subheader("Contratos")
-            st.write("Redacción automática de contratos y renovaciones.")
+            st.write("Redacción automática de documentos.")
             if st.button("Crear Documentos", use_container_width=True):
                 ir_a("📄 Redactor de Contratos")
 
-# --- PANTALLA 2: ANÁLISIS DE CORREOS ---
-elif st.session_state.navegacion == "📧 Análisis de bandeja de entrada":
-    st.title("📧 Análisis de Bandeja de Entrada")
-    if st.button("⬅️ Volver al Inicio"):
-        ir_a("🏠 Inicio")
-        
-    st.info("Sube tus archivos .msg o .eml para procesarlos.")
+# --- PANTALLA 2: SUITE CORREO (NUEVA ESTRUCTURA) ---
+elif st.session_state.navegacion == "📮 Suite CORREO":
+    st.title("📮 Suite CORREO")
+    if st.button("⬅️ Volver al Inicio"): ir_a("🏠 Inicio")
+    
+    # CREAMOS LAS PESTAÑAS
+    tab1, tab2 = st.tabs(["📤 Análisis de Bandeja de Entrada", "📅 Tareas Diarias (Calendario)"])
 
-    with st.form("mail_form", clear_on_submit=True):
-        uploaded_files = st.file_uploader("Arrastra archivos aquí", type=['msg', 'eml'], accept_multiple_files=True)
-        submitted = st.form_submit_button("⚡ ANALIZAR AHORA")
+    # --- PESTAÑA 1: SUBIDA Y ANÁLISIS ---
+    with tab1:
+        st.header("Analizar Nuevos Correos")
+        st.info("Sube tus archivos .msg o .eml. Los resultados se guardarán en 'Tareas Diarias'.")
 
-    if submitted and uploaded_files:
-        st.write("---")
-        progress_bar = st.progress(0)
-        
-        for i, uploaded_file in enumerate(uploaded_files):
-            # Lectura
-            if uploaded_file.name.lower().endswith(".msg"):
-                try: m = extract_msg.Message(uploaded_file); rem=m.sender; asu=m.subject; cue=m.body
-                except: rem="?"; asu="Error"; cue=""
+        with st.form("mail_form", clear_on_submit=True):
+            uploaded_files = st.file_uploader("Arrastra archivos aquí", type=['msg', 'eml'], accept_multiple_files=True)
+            submitted = st.form_submit_button("⚡ ANALIZAR Y GUARDAR")
+
+        if submitted and uploaded_files:
+            st.write("---")
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Lista temporal para guardar los resultados de ESTA tanda
+            resultados_tanda = []
+
+            for i, uploaded_file in enumerate(uploaded_files):
+                status_text.text(f"Analizando correo {i+1} de {len(uploaded_files)}...")
+                
+                # Lectura
+                if uploaded_file.name.lower().endswith(".msg"):
+                    try: m = extract_msg.Message(uploaded_file); rem=m.sender; asu=m.subject; cue=m.body
+                    except: rem="?"; asu="Error"; cue=""
+                else:
+                    rem, asu, cue = leer_eml(uploaded_file)
+                
+                if cue and len(cue)>15000: cue=cue[:15000]
+
+                # Prompt Estricto
+                prompt = f"""
+                Actúa como mi Asistente Comercial experto. Analiza este correo:
+                DE: {rem} | ASUNTO: {asu} | MENSAJE: {cue}
+                
+                Genera un reporte OBLIGATORIAMENTE con esta estructura exacta:
+
+                1. **Clasificación**: Elige UNA de estas categorías exactas: 
+                [Ascensores PARADOS, Amenazas de BAJAS, IPOS Inspecciones de industria, DINAMIZACIONES y MODERNIZACIONES, SUSTITUCION de Ascensor, Validación de Partes de Trabajo PRs, DEUDA de clientes, Subidas de IPC, RENEGOCIACION de Contratos, FACTURACIÓN de Clientes, VENTA NUEVA, OTROS].
+                
+                2. **Resumen del correo**: Resumen del problema en 1 frase.
+                
+                3. **Accion a realizar**: Acción concreta que debo realizar yo.
+
+                4. **Respuesta**:
+                (Pon la respuesta dentro de un bloque de código formato texto para copiar y pegar):
+                ```text
+                Hola...
+                ```
+                """
+                
+                try:
+                    time.sleep(1)
+                    res = model.generate_content(prompt)
+                    
+                    # Guardamos el resultado en memoria en vez de mostrarlo
+                    resultados_tanda.append({
+                        "asunto": asu,
+                        "analisis": res.text,
+                        "hora": datetime.datetime.now().strftime("%H:%M")
+                    })
+                    
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                
+                progress_bar.progress((i+1)/len(uploaded_files))
+            
+            # --- GUARDADO EN MEMORIA ---
+            hoy_str = str(datetime.date.today()) # Ej: '2023-10-27'
+            
+            # Si ya había cosas hoy, añadimos las nuevas, si no, creamos la lista
+            if hoy_str in st.session_state.db_correos:
+                st.session_state.db_correos[hoy_str].extend(resultados_tanda)
             else:
-                rem, asu, cue = leer_eml(uploaded_file)
-            
-            if cue and len(cue)>15000: cue=cue[:15000]
+                st.session_state.db_correos[hoy_str] = resultados_tanda
 
-            # --- AQUI ESTA EL CAMBIO IMPORTANTE: EL PROMPT ---
-            prompt = f"""
-            Actúa como mi Asistente Comercial experto. Analiza este correo:
-            DE: {rem} | ASUNTO: {asu} | MENSAJE: {cue}
-            
-            Genera un reporte OBLIGATORIAMENTE con esta estructura exacta:
+            status_text.empty()
+            st.success("✅ Bandeja de entrada analizada y respuestas generadas.")
+            st.info("👉 Ve a la pestaña **'Tareas Diarias'** para ver los resultados.")
 
-            1. **Clasificación**: Elige UNA de estas categorías exactas (copia el nombre tal cual): 
-               [Ascensores PARADOS, Amenazas de BAJAS, IPOS Inspecciones de industria, DINAMIZACIONES y MODERNIZACIONES, SUSTITUCION de Ascensor, Validación de Partes de Trabajo PRs, DEUDA de clientes, Subidas de IPC, RENEGOCIACION de Contratos, FACTURACIÓN de Clientes, VENTA NUEVA, OTROS].
-            
-            2. **Resumen del correo**: Resumen del problema en 1 frase.
-            
-            3. **Accion a realizar**: Acción concreta que debo realizar yo.
-
-            4. **Respuesta**:
-            (Pon la respuesta dentro de un bloque de código para que se vea diferente, así:)
-            ```text
-            Hola [Nombre],
-            ...cuerpo del mensaje...
-            Saludos.
-            ```
-            """
-            
-            try:
-                time.sleep(1)
-                res = model.generate_content(prompt)
-                with st.expander(f"📩 {asu}", expanded=True):
-                    st.markdown(res.text)
-            except Exception as e:
-                st.error(f"Error: {e}")
-            
-            progress_bar.progress((i+1)/len(uploaded_files))
-        st.success("✅ ¡Trabajo terminado!")
-
-# --- OTRAS PANTALLAS ---
-elif st.session_state.navegacion == "🚧 Gestión de Obras":
-    st.title("🚧 Gestión de Obras")
-    if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
-    st.warning("🛠️ Módulo en construcción.")
-
-elif st.session_state.navegacion == "📄 Redactor de Contratos":
-    st.title("📄 Redactor de Contratos")
-    if st.button("⬅️ Volver"): ir_a("🏠 Inicio")
-    st.warning("🛠️ Módulo en construcción.")
+    # --- PESTAÑA 2: CALENDARIO Y TAREAS ---
+    with tab2:
+        st.header("📅 Tareas Diarias")
+        
+        col_cal, col_info = st.columns([1, 3])
+        
+        with col_cal:
+            # Selector de fecha (Calendario)
+            fecha_selec = st.date_input("Sele
