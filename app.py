@@ -2,10 +2,10 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# --- IMPORTAMOS TUS NUEVOS MÓDULOS ---
+# --- IMPORTAMOS LOS MÓDULOS (NUEVOS NOMBRES) ---
 import suite_correo
-import suite_obras
-import suite_contratos
+import suite_sustituciones      # Antes suite_obras
+import suite_administradores    # Antes suite_contratos
 
 # --- 1. CONFIGURACIÓN GLOBAL ---
 st.set_page_config(
@@ -17,10 +17,10 @@ st.set_page_config(
 # --- LISTA MAESTRA DE NAVEGACIÓN ---
 MENU_INICIO = "🏠 Inicio"
 MENU_CORREO = "📮 Suite CORREO"
-MENU_OBRAS = "🚧 Gestión de Obras"
-MENU_CONTRATOS = "📄 Redactor de Contratos"
+MENU_SUSTITUCIONES = "🔧 Suite SUSTITUCIONES"
+MENU_ADMINISTRADORES = "👥 Suite ADMINISTRADORES"
 
-OPCIONES_MENU = [MENU_INICIO, MENU_CORREO, MENU_OBRAS, MENU_CONTRATOS]
+OPCIONES_MENU = [MENU_INICIO, MENU_CORREO, MENU_SUSTITUCIONES, MENU_ADMINISTRADORES]
 
 # --- 2. GESTIÓN DE SECRETOS Y MEMORIA ---
 try:
@@ -38,7 +38,7 @@ def ir_a(pagina):
     st.session_state.navegacion = pagina
     st.rerun()
 
-# --- 3. BARRA LATERAL (Solo Login y Menú) ---
+# --- 3. BARRA LATERAL ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
     st.title("Acceso Privado")
@@ -97,25 +97,34 @@ if st.session_state.navegacion == MENU_INICIO:
     st.markdown("---")
 
     col1, col2, col3 = st.columns(3)
+    
+    # TARJETA 1: CORREO
     with col1:
         with st.container(border=True):
             st.write("📮"); st.subheader("Suite CORREO")
+            st.write("Análisis de emails y tareas.")
             if st.button("Ir al Correo", use_container_width=True): ir_a(MENU_CORREO)
+            
+    # TARJETA 2: SUSTITUCIONES
     with col2:
         with st.container(border=True):
-            st.write("🚧"); st.subheader("Obras")
-            if st.button("Gestionar Obras", use_container_width=True): ir_a(MENU_OBRAS)
+            st.write("🔧"); st.subheader("Sustituciones")
+            st.write("Gestión técnica de cambios.")
+            if st.button("Ir a Sustituciones", use_container_width=True): ir_a(MENU_SUSTITUCIONES)
+            
+    # TARJETA 3: ADMINISTRADORES
     with col3:
         with st.container(border=True):
-            st.write("📄"); st.subheader("Contratos")
-            if st.button("Documentos", use_container_width=True): ir_a(MENU_CONTRATOS)
+            st.write("👥"); st.subheader("Administradores")
+            st.write("Gestión de fincas y contratos.")
+            if st.button("Ir a Administradores", use_container_width=True): ir_a(MENU_ADMINISTRADORES)
 
-# PANTALLAS DE HERRAMIENTAS (Llamamos a los otros archivos)
+# PANTALLAS DE HERRAMIENTAS
 elif st.session_state.navegacion == MENU_CORREO:
-    suite_correo.app(model) # <--- Aquí delegamos el trabajo al archivo suite_correo.py
+    suite_correo.app(model) 
 
-elif st.session_state.navegacion == MENU_OBRAS:
-    suite_obras.app()
+elif st.session_state.navegacion == MENU_SUSTITUCIONES:
+    suite_sustituciones.app() # Llama al nuevo archivo
 
-elif st.session_state.navegacion == MENU_CONTRATOS:
-    suite_contratos.app()
+elif st.session_state.navegacion == MENU_ADMINISTRADORES:
+    suite_administradores.app() # Llama al nuevo archivo
