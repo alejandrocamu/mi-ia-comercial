@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# --- IMPORTAMOS TUS MÓDULOS ---
+# --- IMPORTAMOS LOS MÓDULOS ---
 import suite_correo
 import suite_sustituciones
 import suite_administradores
@@ -37,6 +37,7 @@ with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/906/906343.png", width=80)
     st.title("Acceso Privado")
     
+    # Login
     if not st.session_state.authenticated:
         input_pass = st.text_input("Contraseña", type="password")
         if input_pass == PASSWORD_REAL:
@@ -49,9 +50,10 @@ with st.sidebar:
     st.success("Hola, Comercial 👋")
     st.divider()
     
+    # Menú
     opciones = ["🏠 Inicio", "📮 Suite CORREO", "🔧 Suite SUSTITUCIONES", "👥 Suite ADMINISTRADORES"]
     
-    # Bloque try/except corregido para evitar SyntaxError
+    # Evitamos errores de índice
     try:
         idx = opciones.index(st.session_state.navegacion)
     except:
@@ -65,4 +67,10 @@ with st.sidebar:
         
     st.divider()
     if st.button("Cerrar Sesión"):
-        st.
+        st.session_state.authenticated = False
+        st.rerun()
+
+# --- 5. CONEXIÓN IA (Modelos 2.0 / Latest) ---
+genai.configure(api_key=API_KEY)
+
+# Lista de modelos que tu cuenta SÍ detecta
