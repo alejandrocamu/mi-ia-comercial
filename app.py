@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# --- IMPORTAMOS LOS MÓDULOS ---
+# --- IMPORTAMOS TUS MÓDULOS ---
 import suite_correo
 import suite_sustituciones
 import suite_administradores
@@ -22,7 +22,6 @@ except:
     st.error("⚠️ Error: Configura los secretos en Streamlit Cloud.")
     st.stop()
 
-# Inicializar estados
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
 if "db_correos" not in st.session_state: st.session_state.db_correos = {} 
 if "navegacion" not in st.session_state: st.session_state.navegacion = "🏠 Inicio"
@@ -51,7 +50,7 @@ with st.sidebar:
     opciones = ["🏠 Inicio", "📮 Suite CORREO", "🔧 Suite SUSTITUCIONES", "👥 Suite ADMINISTRADORES"]
     try: idx = opciones.index(st.session_state.navegacion)
     except: idx = 0
-        
+    
     seleccion = st.radio("Herramientas:", opciones, index=idx)
     
     if seleccion != st.session_state.navegacion:
@@ -61,29 +60,28 @@ with st.sidebar:
     st.divider()
     if st.button("Cerrar Sesión"):
         st.session_state.authenticated = False
-        st.session_state.navegacion = "🏠 Inicio"
         st.rerun()
 
-# --- 4. CONEXIÓN IA (CONFIGURADO PARA GEMINI PRO) ---
+# --- 4. CONEXIÓN IA (LISTA EXACTA DE TU DIAGNÓSTICO) ---
 genai.configure(api_key=API_KEY)
 
-# Lista de modelos "Pro" (Versión 1.0 y 1.5 Pro)
-# Estos suelen tener buenos límites y aparecían en tu lista.
+# Esta lista contiene SOLO los modelos que salieron en tu diagnóstico.
+# Priorizamos el "Lite" esperando que tenga menos restricciones.
 CANDIDATOS = [
-    'gemini-pro',          # El clásico 1.0 (Muy estable)
-    'gemini-pro-latest',   # Variante que tenías en tu lista
-    'models/gemini-pro',
-    'gemini-1.5-pro',      # Versión potente (si la tienes activa)
-    'gemini-1.5-pro-latest'
+    'gemini-2.0-flash-lite-preview-02-05', # Intento 1: El ligero
+    'gemini-2.0-flash-lite',                # Intento 2: Alias del ligero
+    'gemini-2.0-flash',                     # Intento 3: El potente (Límite 20)
+    'gemini-flash-latest'                   # Intento 4: El genérico
 ]
 
 if "model_name" not in st.session_state:
     st.session_state.model_name = None
-    # Buscamos cuál funciona
+    
+    # Buscamos desesperadamente uno que funcione
     for nombre in CANDIDATOS:
         try:
-            test_model = genai.GenerativeModel(nombre)
-            test_model.generate_content("Hola") # Prueba de conexión
+            t = genai.GenerativeModel(nombre)
+            t.generate_content("Hola") # Prueba de vida
             st.session_state.model_name = nombre
             break
         except:
@@ -91,17 +89,24 @@ if "model_name" not in st.session_state:
 
 if st.session_state.model_name:
     model = genai.GenerativeModel(st.session_state.model_name)
-    # st.sidebar.success(f"Motor: {st.session_state.model_name}") # Descomenta si quieres ver cuál usas
+    # st.sidebar.caption(f"Motor activo: {st.session_state.model_name}") 
 else:
-    st.error("❌ No se encuentra ningún modelo 'Gemini Pro' en tu cuenta.")
-    st.warning("Intenta crear una API KEY nueva en un proyecto nuevo de Google AI Studio.")
+    st.error("⛔ BLOQUEO TOTAL DE GOOGLE")
+    st.warning("""
+    Tu API Key actual está bloqueada por exceso de uso (Límite 20/día) y no tiene acceso a los modelos ilimitados.
+    
+    SOLUCIÓN ÚNICA:
+    1. Ve a aistudio.google.com
+    2. Crea una API Key nueva en un PROYECTO NUEVO.
+    3. Ponla en los Secrets de Streamlit.
+    """)
     st.stop()
 
 # =========================================================
 #                 ZONA DE CONTENIDO
 # =========================================================
 
-# PANTALLA DE INICIO
+# INICIO
 if st.session_state.navegacion == "🏠 Inicio":
     st.title("🚀 Tu Centro de Mando")
     st.markdown("---")
@@ -111,33 +116,30 @@ if st.session_state.navegacion == "🏠 Inicio":
     with col1:
         with st.container(border=True):
             st.subheader("📮 Suite CORREO")
-            st.write("Analizar emails y tareas.")
-            if st.button("Ir al Correo", use_container_width=True):
-                navegar_a("📮 Suite CORREO")
+            st.write("Analizar emails.")
+            if st.button("Ir al Correo", use_container_width=True): navegar_a("📮 Suite CORREO")
             
     with col2:
         with st.container(border=True):
             st.subheader("🔧 Sustituciones")
             st.write("Gestión técnica.")
-            if st.button("Ir a Sustituciones", use_container_width=True):
-                navegar_a("🔧 Suite SUSTITUCIONES")
+            if st.button("Ir a Sustituciones", use_container_width=True): navegar_a("🔧 Suite SUSTITUCIONES")
             
     with col3:
         with st.container(border=True):
             st.subheader("👥 Administradores")
-            st.write("Gestión de fincas.")
-            if st.button("Ir a Administradores", use_container_width=True):
-                navegar_a("👥 Suite ADMINISTRADORES")
+            st.write("Fincas y contratos.")
+            if st.button("Ir a Administradores", use_container_width=True): navegar_a("👥 Suite ADMINISTRADORES")
 
-# PANTALLAS DE HERRAMIENTAS
+# HERRAMIENTAS
 elif st.session_state.navegacion == "📮 Suite CORREO":
     try: suite_correo.app(model)
-    except Exception as e: st.error(f"Error módulo correo: {e}")
+    except Exception as e: st.error(f"Error Correo: {e}")
 
 elif st.session_state.navegacion == "🔧 Suite SUSTITUCIONES":
     try: suite_sustituciones.app()
-    except Exception as e: st.error(f"Error módulo sustituciones: {e}")
+    except Exception as e: st.error(f"Error Sustituciones: {e}")
 
 elif st.session_state.navegacion == "👥 Suite ADMINISTRADORES":
     try: suite_administradores.app()
-    except Exception as e: st.error(f"Error módulo administradores: {e}")
+    except Exception as e: st.error(f"Error Administradores: {e}")
