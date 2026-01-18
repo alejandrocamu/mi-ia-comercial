@@ -1,38 +1,39 @@
 import streamlit as st
-import google.generativeai as genai
 import os
+from openai import OpenAI
 
 # --- IMPORTAMOS MÓDULOS ---
 import suite_correo
 import suite_sustituciones
 import suite_administradores
-import suite_tareas  # <--- IMPORTANTE
+import suite_tareas
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Suite Comercial IA", page_icon="🏢", layout="wide")
 
-# --- CONSTANTES DE MENÚ ---
+# --- CONSTANTES ---
 MENU_HOME = "🏠 Inicio"
 MENU_MAIL = "📮 Suite CORREO"
-MENU_TAREAS = "📋 Suite TAREAS" # <--- NUEVO
+MENU_TAREAS = "📋 Suite TAREAS"
 MENU_OBRAS = "🔧 Suite SUSTITUCIONES"
 MENU_ADMIN = "👥 Suite ADMINISTRADORES"
 
 OPCIONES_MENU = [MENU_HOME, MENU_MAIL, MENU_TAREAS, MENU_OBRAS, MENU_ADMIN]
 
-# --- SECRETOS ---
+# --- SECRETOS (Hugging Face busca OPENAI_API_KEY) ---
 try:
-    API_KEY = st.secrets["GOOGLE_API_KEY"]
+    # Nota: En Hugging Face los secretos se llaman igual, st.secrets funciona igual
+    API_KEY = st.secrets["OPENAI_API_KEY"]
     PASSWORD_REAL = st.secrets["APP_PASSWORD"]
 except:
-    st.error("⚠️ Error Secretos"); st.stop()
+    st.error("⚠️ Error: Configura OPENAI_API_KEY y APP_PASSWORD en los secretos del Space.")
+    st.stop()
 
 # --- ESTADOS ---
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
 if "navegacion" not in st.session_state: st.session_state.navegacion = MENU_HOME
 if "db_correos" not in st.session_state: st.session_state.db_correos = {}
-if "db_tareas" not in st.session_state: st.session_state.db_tareas = [] # Memoria para tareas
-if "model_name" not in st.session_state: st.session_state.model_name = None
+if "db_tareas" not in st.session_state: st.session_state.db_tareas = []
 
 def navegar_a(pagina):
     st.session_state.navegacion = pagina; st.rerun()
@@ -60,23 +61,19 @@ with st.sidebar:
     if st.button("Cerrar Sesión"):
         st.session_state.authenticated = False; st.rerun()
 
-# --- CONEXIÓN IA ---
-genai.configure(api_key=API_KEY)
-# Intentamos conectar si hace falta
-if not st.session_state.model_name:
-    try: 
-        genai.GenerativeModel('gemini-2.0-flash-exp').generate_content("T")
-        st.session_state.model_name = 'gemini-2.0-flash-exp'
-    except: pass
-
-model = genai.GenerativeModel(st.session_state.model_name) if st.session_state.model_name else None
+# --- CONEXIÓN OPENAI (ChatGPT) ---
+try:
+    client = OpenAI(api_key=API_KEY)
+except Exception as e:
+    st.error(f"❌ Error conectando con OpenAI: {e}")
+    st.stop()
 
 # --- ROUTER ---
 pagina = st.session_state.navegacion
 
 if pagina == MENU_HOME:
-    st.title("🚀 Tu Centro de Mando")
-    col1, col2, col3, col4 = st.columns(4) # Ahora son 4 columnas
+    st.title("🚀 Tu Centro de Mando (ChatGPT Powered)")
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         with st.container(border=True):
@@ -84,7 +81,7 @@ if pagina == MENU_HOME:
             if st.button("Ir a Correo", use_container_width=True): navegar_a(MENU_MAIL)
     with col2:
         with st.container(border=True):
-            st.subheader("📋 Tareas") # Nueva tarjeta
+            st.subheader("📋 Tareas")
             if st.button("Ir a Tareas", use_container_width=True): navegar_a(MENU_TAREAS)
     with col3:
         with st.container(border=True):
@@ -96,11 +93,9 @@ if pagina == MENU_HOME:
             if st.button("Ir a Admin", use_container_width=True): navegar_a(MENU_ADMIN)
 
 elif pagina == MENU_MAIL:
-    if model: suite_correo.app(model)
-    else: st.error("Error IA")
+    # Pasamos el cliente 'client' (OpenAI)
+    suite_correo.app(client)
 
-elif pagina == MENU_TAREAS:
-    suite_tareas.app() # Llamada al nuevo módulo
-
+elif pagina == MENU_TAREAS: suite_tareas.app()
 elif pagina == MENU_OBRAS: suite_sustituciones.app()
 elif pagina == MENU_ADMIN: suite_administradores.app()
