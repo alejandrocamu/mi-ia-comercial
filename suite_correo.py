@@ -14,14 +14,14 @@ def leer_eml(f):
         return msg['from'], msg['subject'], "HTML/Imagen"
     except: return "?", "Error", "Error"
 
-# --- LISTA DE CLASIFICACIONES ---
 CATEGORIAS = [
     "Ascensores PARADOS", "Amenazas de BAJAS", "IPOS Inspecciones", 
     "DINAMIZACIONES", "SUSTITUCION", "Partes de Trabajo", 
     "DEUDA", "IPC", "RENEGOCIACION", "FACTURACIÓN", "VENTA NUEVA", "OTROS"
 ]
 
-def app(model):
+# Recibimos 'client' (OpenAI)
+def app(client):
     st.title("📮 Suite CORREO")
     
     if st.button("⬅️ Volver al Inicio"): 
@@ -32,7 +32,7 @@ def app(model):
 
     # --- PESTAÑA 1: ANÁLISIS ---
     with tab1:
-        st.header("Analizar Nuevos Correos (IA)")
+        st.header("Analizar Nuevos Correos (ChatGPT)")
         with st.form("mail_form", clear_on_submit=True):
             uploaded_files = st.file_uploader("Arrastra archivos .msg o .eml", type=['msg', 'eml'], accept_multiple_files=True)
             submitted = st.form_submit_button("⚡ ANALIZAR Y GUARDAR")
@@ -42,7 +42,6 @@ def app(model):
             resultados_tanda = []
 
             for i, uploaded_file in enumerate(uploaded_files):
-                # Lectura de archivo
                 if uploaded_file.name.lower().endswith(".msg"):
                     try: m = extract_msg.Message(uploaded_file); rem=m.sender; asu=m.subject; cue=m.body
                     except: rem="?"; asu="Error"; cue=""
@@ -50,13 +49,27 @@ def app(model):
                     rem, asu, cue = leer_eml(uploaded_file)
                 if cue and len(cue)>15000: cue=cue[:15000]
 
-                # IA
-                prompt = f"""
-                Analiza: DE: {rem} | ASUNTO: {asu} | MENSAJE: {cue}
-                Reporte: 1. Clasificación ({CATEGORIAS}), 2. Resumen, 3. Acción, 4. Respuesta.
+                # --- LÓGICA OPENAI ---
+                prompt_sistema = "Eres un asistente comercial eficiente."
+                prompt_usuario = f"""
+                Analiza este correo.
+                DE: {rem} | ASUNTO: {asu} | MENSAJE: {cue}
+                
+                Genera reporte exacto:
+                1. Clasificación: Elige UNA de {CATEGORIAS}
+                2. Resumen: 1 frase.
+                3. Acción: Qué hacer.
+                4. Respuesta: Borrador respuesta.
                 """
-                try: res = model.generate_content(prompt); analisis_texto = res.text
-                except Exception as e: analisis_texto = f"Error IA: {e}"
+                
+                try:
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "system", "content": prompt_sistema},
+                                  {"role": "user", "content": prompt_usuario}]
+                    )
+                    analisis_texto = response.choices[0].message.content
+                except Exception as e: analisis_texto = f"Error OpenAI: {e}"
 
                 resultados_tanda.append({
                     "asunto": asu, "analisis": analisis_texto, "origen": "🤖 IA", 
@@ -67,7 +80,7 @@ def app(model):
             hoy_str = str(datetime.date.today())
             if hoy_str in st.session_state.db_correos: st.session_state.db_correos[hoy_str].extend(resultados_tanda)
             else: st.session_state.db_correos[hoy_str] = resultados_tanda
-            st.success(f"✅ {len(resultados_tanda)} correos guardados.")
+            st.success(f"✅ {len(resultados_tanda)} correos procesados.")
 
     # --- PESTAÑA 2: CALENDARIO ---
     with tab2:
@@ -76,21 +89,18 @@ def app(model):
         with col_cal:
             fecha_selec = st.date_input("Día:", datetime.date.today())
             fecha_str = str(fecha_selec)
-            st.write("") # Espacio
+            st.write("") 
             if st.button("🗑️ Borrar Todo el Día", type="primary"):
                 st.session_state.db_correos[fecha_str] = []; st.rerun()
 
         with col_gestion:
-            # --- CABECERA CON BOTÓN PEQUEÑO A LA DERECHA ---
+            # Cabecera con botón pequeño popover a la derecha
             c_titulo, c_boton = st.columns([3, 1])
-            with c_titulo:
-                st.subheader(f"Correos del {fecha_str}")
+            with c_titulo: st.subheader(f"Correos del {fecha_str}")
             with c_boton:
-                # Usamos popover para que sea un menú desplegable pequeño y limpio
                 with st.popover("➕ Crear Manual", use_container_width=True):
                     st.markdown("### Nuevo Correo")
                     with st.form("manual_complete"):
-                        # REQUISITO 1: CAMPOS COMPLETOS RESTAURADOS
                         clasif = st.selectbox("Clasificación", CATEGORIAS)
                         asunto = st.text_input("Asunto / Cliente")
                         resumen = st.text_area("Resumen")
@@ -112,10 +122,8 @@ def app(model):
                             if fecha_str not in st.session_state.db_correos: st.session_state.db_correos[fecha_str] = []
                             st.session_state.db_correos[fecha_str].append(nuevo)
                             st.rerun()
-
             st.divider()
 
-            # --- LISTADO ---
             if fecha_str in st.session_state.db_correos and st.session_state.db_correos[fecha_str]:
                 lista = st.session_state.db_correos[fecha_str]
                 for i, correo in enumerate(lista):
@@ -126,10 +134,11 @@ def app(model):
                         if c1.button("🗑️ Borrar correo", key=f"del_{i}"):
                             st.session_state.db_correos[fecha_str].pop(i); st.rerun()
                         
+                        # Conector con Suite Tareas
                         if c2.button("✅ Generar tarea", key=f"gen_{i}"):
                             st.session_state.new_task_data = {"titulo": correo['asunto'], "descripcion": correo['analisis']}
                             st.session_state.show_task_popup = True
                             st.session_state.navegacion = "📋 Suite TAREAS" 
                             st.rerun()
             else:
-                st.caption("No hay correos registrados hoy.")
+                st.caption("No hay correos hoy.")
